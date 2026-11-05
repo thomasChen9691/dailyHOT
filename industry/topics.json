@@ -2,18 +2,18 @@
   "groups": [
     {
       "key": "company",
-      "name": "公司与模型",
-      "blurb": "按厂商追踪模型、产品与公司动态"
+      "name": "公司、机构与标的",
+      "blurb": "按厂商与机构追踪：AI 公司、监管与交易所、跨市场龙头"
     },
     {
       "key": "field",
-      "name": "技术方向",
-      "blurb": "按技术领域深挖：Agent、多模态、具身智能……"
+      "name": "技术方向与市场",
+      "blurb": "按方向深挖：Agent、多模态，以及 A 股、美股、ETF 与半导体链"
     },
     {
       "key": "genre",
       "name": "内容类型",
-      "blurb": "按体裁浏览：论文、教程、观点、政策……"
+      "blurb": "按体裁浏览：论文、教程、财报、公告、监管新规……"
     }
   ],
   "topics": [
@@ -333,6 +333,167 @@
         "政策/监管"
       ],
       "definition": "AI 相关的政策法规与政府监管：立法进展、出口管制与全球治理。"
+    },
+    {
+      "slug": "fed",
+      "name": "美联储 / FOMC",
+      "group": "company",
+      "entityId": "fed",
+      "definition": "美联储的利率决议、会议纪要、官员表态，以及对流动性预期的正式说明。"
+    },
+    {
+      "slug": "csrc",
+      "name": "中国证监会",
+      "group": "company",
+      "entityId": "csrc",
+      "definition": "证监会的规则发布、执法处罚与信息披露要求，以及资本市场制度改革。"
+    },
+    {
+      "slug": "sec-us",
+      "name": "美国 SEC",
+      "group": "company",
+      "entityId": "sec",
+      "definition": "SEC 的披露规则、执法行动与 EDGAR 上的重大文件。"
+    },
+    {
+      "slug": "pboc",
+      "name": "中国人民银行",
+      "group": "company",
+      "entityId": "pboc",
+      "definition": "央行的货币政策、利率与准备金调整、公开市场操作与贴息政策。"
+    },
+    {
+      "slug": "tsmc",
+      "name": "台积电 TSMC",
+      "group": "company",
+      "entityId": "tsmc",
+      "definition": "台积电的月度营收、资本开支、产能与先进制程进展，以及 AI 芯片链供需。"
+    },
+    {
+      "slug": "apple",
+      "name": "Apple",
+      "group": "company",
+      "entityId": "apple",
+      "definition": "Apple 的财报、产品与服务业务变化，以及端侧 AI 相关的正式披露。"
+    },
+    {
+      "slug": "tesla",
+      "name": "Tesla",
+      "group": "company",
+      "entityId": "tesla",
+      "definition": "Tesla 的财报、交付数据、产能与资本开支等可核对的公司披露。"
+    },
+    {
+      "slug": "a-share",
+      "name": "A 股",
+      "group": "field",
+      "tags": ["A 股"],
+      "definition": "沪深北市场的制度变化、上市公司公告与指数、ETF 相关的可核实动态。"
+    },
+    {
+      "slug": "us-equities",
+      "name": "美股",
+      "group": "field",
+      "tags": ["美股"],
+      "definition": "美股公司财报与指引、SEC 披露、美联储决议与主要指数变化。"
+    },
+    {
+      "slug": "fed-rates",
+      "name": "利率与流动性",
+      "group": "field",
+      "tags": ["利率"],
+      "definition": "利率决议、降息加息预期、流动性与汇率相关的正式信息。"
+    },
+    {
+      "slug": "etf-index",
+      "name": "ETF 与指数",
+      "group": "field",
+      "tags": ["ETF"],
+      "definition": "指数成分调整、ETF 份额与规模变化，以及被动资金相关的可核实事实。"
+    },
+    {
+      "slug": "semiconductor-chain",
+      "name": "半导体与出口管制",
+      "group": "field",
+      "tags": ["半导体", "出口管制"],
+      "definition": "芯片出口管制、算力供给与半导体产业链上 A 股、美股公司的正式披露。"
+    },
+    {
+      "slug": "dividend-lowvol",
+      "name": "红利低波",
+      "group": "field",
+      "tags": ["红利低波"],
+      "definition": "红利、低波类指数与产品的分红、成分调整及可核对的收益数据。"
+    },
+    {
+      "slug": "ai-capex",
+      "name": "AI 资本开支",
+      "group": "field",
+      "tags": ["算力资本开支", "财报"],
+      "definition": "云厂商与芯片公司的资本开支、数据中心投入，及其在财报与指引中的体现。"
+    },
+    {
+      "slug": "earnings",
+      "name": "财报与业绩",
+      "group": "genre",
+      "tags": ["财报/业绩"],
+      "definition": "业绩预告、季报年报与业绩指引：只收有明确主体和可核对数字的披露。"
+    },
+    {
+      "slug": "financial-rules",
+      "name": "金融监管新规",
+      "group": "genre",
+      "tags": ["监管/规则"],
+      "definition": "交易所与监管机构的正式规则、决议和执法，不含口头表态与政策猜测。"
+    },
+    {
+      "slug": "company-filings",
+      "name": "公司公告",
+      "group": "genre",
+      "tags": ["公司公告"],
+      "definition": "上市公司正式披露：重大合同、停复牌、增减持、股权变动与其他法定公告。"
+    },
+    {
+      "slug": "market-moves",
+      "name": "市场异动",
+      "group": "genre",
+      "tags": ["市场异动"],
+      "definition": "有主体、有数字、可核对的价格或资金异动，不含无增量的盘后流水账。"
+    },
+    {
+      "slug": "dividend-buyback",
+      "name": "分红与回购",
+      "group": "genre",
+      "tags": ["分红/回购"],
+      "definition": "分红方案、回购与增减持公告中的具体金额、比例与时间安排。"
+    },
+    {
+      "slug": "ma-ipo",
+      "name": "并购与 IPO",
+      "group": "genre",
+      "tags": ["并购/IPO"],
+      "definition": "已确认的并购交易、IPO 发行与上市安排，不含传闻阶段的消息。"
+    },
+    {
+      "slug": "rates-liquidity",
+      "name": "货币与利率决议",
+      "group": "genre",
+      "tags": ["货币/利率"],
+      "definition": "货币政策、贴息、准备金与流动性工具的正式发布与执行细则。"
+    },
+    {
+      "slug": "index-rebalance",
+      "name": "指数成分调整",
+      "group": "genre",
+      "tags": ["指数/成分"],
+      "definition": "指数调样、成分股进出与 ETF 份额变化的正式公告。"
+    },
+    {
+      "slug": "capex",
+      "name": "资本开支披露",
+      "group": "genre",
+      "tags": ["资本开支"],
+      "definition": "公司在财报、指引或公告里给出的资本开支与数据中心投入数字。"
     }
   ]
 }

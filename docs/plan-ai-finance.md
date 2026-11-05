@@ -1,6 +1,6 @@
 # 定制方案：AI × 金融 双板块热点站
 
-> 状态：**4 项已拍板（第 10 节），进入分批实施**。批次 1 已开始：`site/site.ts` 已改，行业包与模块待做；每批单独提交。
+> 状态：**4 项已拍板（第 10 节）+ 分类体系修订已确认（第 11 节）**，进入分批实施。批次 1 已完成站点身份并提交（`5c12b06`）；行业包与模块待做；每批单独提交。
 > 日期：2026-11-05　｜　基线：`Initial commit`（AIHOT 开源引擎的未定制副本，站名 MyHOT）
 > 校验基线：Node 24.22.1 / npm 11.19.1，`npm ci` 298 包；未改代码前 `npm run typecheck` 通过；`npm run build -w @aihot/web` 通过。独立测试需先构建 web；本机 6 并发时 web server 冷启动会撞 15 秒超时，实测单进程启动约 6 秒，故验证时降并发。DB 测试已用独立容器 `dailyhot-test-pg`（127.0.0.1:55432）跑通单文件。
 
@@ -47,7 +47,7 @@
 | 外部推送入口 | `POST /api/ingest/items`（`INGEST_TOKEN`）、`kind: external` | **已有要闻自动化可直接把结果推进站**，不必重复抓取、不引入付费源 |
 | 门槛差异化 | `SELECTION.classes`：信源类别 → 门槛下限（后台给信源设类别） | 两个板块可在同一份门槛下做有限区分（如金融资讯号抬到 76，AI 官方博客 60） |
 
-**硬约束（必须写进设计）**：网页板块页的过滤是「单个 `p.category`」。因此要么只设 **2 个主类**（`ai` / `finance`），细分靠标签（`?tag=`）和主题页；要么就得自己写模块后端 SQL 合并多类，复杂度显著上升。**本方案选 2 主类 + 标签细分**。
+**硬约束（必须写进设计）**：网页板块页的过滤是「单个 `p.category`」。因此要么只设 **2 个主类**（`ai` / `finance`），细分靠标签（`?tag=`）和主题页；要么就得自己写模块后端 SQL 合并多类。~~本方案选 2 主类 + 标签细分~~ → **已修订为「保留细分类 + 模块自带接口按 section 合并」，见第 11 节**。
 
 ---
 
@@ -97,7 +97,7 @@
 | `industry/sources.json` | 见下节「信源与集成」 |
 | `industry/wording.ts` | 双板块用词表（如「炸裂」「重磅」等夸张说法） |
 | `site/site.ts` | 除 P0 外：`description`、`keywords`、`tagline`、`ABOUT.*`、`CARDS.*`、`AGENT.search`、`REPORTS.*`、`ALERTS.*`；`PUBLIC_CATEGORIES` 视是否加细分类再定 |
-| `site/public/` | `robots.txt`、`manifest.webmanifest`、`openapi-v1.json` 占位符；`{{categories}}` 会自动换成两个分类 key |
+| `site/public/` | `robots.txt` / `manifest.webmanifest` / `openapi-v1.json` 的 `{{…}}` 由 `apps/api/src/routes/static.ts` **运行时填充**；`{{categories}}` 自动展开为 `PUBLIC_API_CATEGORY_KEYS`（现 10 个）。**三个文件本身无需修改** |
 | `site/changelog.json` | 替换 2026-10-01 示例为真实上线记录 |
 | `site/brand/` | Logo / favicon / 报头 `nameplates/` 重新生成（`node scripts/nameplates.ts package`）；`ABOUT.maker` 的公众号二维码 |
 | `modules/board/`（仅 B 方案） | `package.json`、`module.ts`（`/ai`、`/finance` + `redirects`）、`web.tsx`（侧栏两项 + 「我的」两行）、`ai.tsx` / `finance.tsx`（SSR loader 读 `/api/site/timeline?category=…`，复用 `@aihot/web/features/feed/Timeline`）、`tests/` |
@@ -122,7 +122,7 @@
 | 金融 | 新华社财经、证监会与沪深交易所公告（网页列表）、央行 / 统计局、东方财富公告与快讯、腾讯财经、天天基金公告 | T1 一手 / T2 媒体，`rss` + `web_list` + `json_list` |
 | 复用 | 现有「AI 与财经每日要闻（融合）」自动化把已采到的条目经 `POST /api/ingest/items` 推进站（`kind: external`，`INGEST_TOKEN`） | 不重复抓取、不新增付费依赖 |
 
-注意：中文网页发布时间常不带时区，按信源时区读（默认 `+08:00`）；`CST` 按北京时间。海外 AI 源若在大陆服务器上抓，需 `EGRESS_PROXY_URL`。开盘时段（09:30 / 13:00）把金融源的 `interval_minutes` 调大或用后台暂停，避免盘峰打满免费源；模型侧用后台「付费请求上限」做熔断，`COLLECT_ENABLED` / `MODEL_CALLS_ENABLED` 在调界面时设 `false`。
+注意：中文网页发布时间常不带时区，按信源时区读（默认 `+08:00`，只认 `config.publishedAtUtcOffset` 的固定 UTC 偏移）；`CST` 按北京时间。海外 AI 源若在大陆服务器上抓，需 `EGRESS_PROXY_URL`。**`interval_minutes` 只是初值，每天 04:20 会按近 7 天产出自动调整到 15–180 分钟，写死它并不能做盘峰节流**；开盘时段应由 `external` 反哺脚本控制推送节奏，或在后台暂停信源。模型侧用后台「付费请求上限」做熔断，`COLLECT_ENABLED` / `MODEL_CALLS_ENABLED` 在调界面时设 `false`。
 
 ---
 
@@ -186,7 +186,7 @@ node scripts/smoke.ts --base http://localhost:3000               # 站点起来�
 **因目标用户新增「美股观察」而追加的约束**：
 
 - 金融板块标签词表补 `美股`、`A 股`、`美联储`、`财报`、`SEC`、`ETF` 等；`ENTITIES` 补美股头部公司与机构；`IDENTITY_LEXICON` 覆盖股票代码与机构别称，防张冠李戴。
-- 美股信源**必须显式声明信源时区（America/New_York）**：中文网页常不带时区，不声明会把日报 24 小时窗口算错（AGENTS.md 明确要求按信源时区读，默认 +08:00）。
+- ~~美股信源必须显式声明信源时区（America/New_York）~~ → **作废**：框架不认 IANA 时区名，只认 `config.publishedAtUtcOffset` 固定 UTC 偏移；实测美联储 / SEC / CNBC / MarketWatch 的 RSS 均自带时区，无需额外设置，固定偏移反而无法跟随美东夏令时（详见 11.2）。
 - 若后续做行情展示，遵守 A 股/美股惯例差异：中国境内涨红跌绿，¥ 为默认货币符号。
 
 ### 10.1 实施批次（incremental verify-then-commit，每批单独提交）
@@ -205,3 +205,73 @@ node scripts/smoke.ts --base http://localhost:3000               # 站点起来�
 
 1. **变现路径**（立项三项缺一不可，当前只有痛点与目标用户）；
 2. `site/pages/terms.md` / `privacy.md` 的**正文内容**（AGENTS.md 要求本人确认，不能由我代写）。
+
+---
+
+## 11. 方案修订（2026-11-05 第二次确认，用户逐项选定）
+
+### 11.1 分类体系：改为「保留细分类 + 按 section 分节」
+
+| 项 | 原方案 | **修订后** |
+|---|---|---|
+| 分类数 | 2 主类 `ai` / `finance` + 标签细分 | **6 个 AI 细分类保持不变 + 新增 4 个金融类 = 10 类** |
+| 日报分节 | 2 节 | 2 节：所有 AI 类 `section: "AI 大事"`，金融类 `section: "金融市场"` |
+| 板块页数据 | 网页 `?category=ai` 单值过滤 | **模块自带接口** `/api/board/ai`、`/api/board/finance`，一次 SQL 按 section 取多类 |
+| 引擎测试 | 需改写 31 个测试文件、约 60 处分类字面量 + 5 份提示词 | **分类 key 一个未改，31 个文件不动**；但 `section` 合并成两节后 `correct.ts` 用 `SECTION_ORDER` 校验冻结报告分节名，需把 `tests/category-corrections.test.ts`、`tests/report-recovery.test.ts` 的示例分节名换成新值（实测 2 个文件、8 处字符串，规则本身未改） |
+| 上游合并 | 冲突面大 | 只动 `industry/` 与新增 `modules/`，核心代码不动 |
+| 代价 | 筛选栏最干净 | 筛选栏 10 个分类；模块需多写约 50 行只读查询 |
+
+用户选择：**保留细分类（推荐）** + **模块自带接口（推荐）**。
+
+### 11.2 实施前查证到的三处事实修正（原方案写错，以此为准）
+
+1. **`selection_class` 不在 `industry/sources.json`**：`scripts/seed.ts` 的 `SeedSource` 无此字段，写进去会被静默忽略；字段是数据库顶层列，需在后台「信源」页设置（`docs/sources.md:218`）。`SELECTION.classes` 只是可选下限，未分配的信源按 `tier` 门槛走。
+2. **信源时区不认 IANA 名**：只认 `config.publishedAtUtcOffset` 的固定 UTC 偏移（`"+08:00"` / `"+00:00"`），详情页可另设 `config.detail.publishedAtUtcOffset`（`packages/backend/src/sources/dates.ts`、`config-keys.ts`）。美股 RSS 通常自带时区，不额外设偏移；若必须设，用 `+00:00` 且注意**固定偏移无法跟随美东夏令时**，需按源逐一核对。原方案第 10 节的 `America/New_York` 作废。
+3. **`POST /api/ingest/items` 不接受 category / tags**：请求体只有 `sourceId` / `sourceName` / `items[{title,url,publishedAt,author,raw}]`；分类与标签由站内 `structure.md` 流程生成。鉴权为 `Authorization: Bearer <INGEST_TOKEN>`（≥16 位）。`publishedAt` 固定按 `+00:00` 解析，反哺时须传带时区的 ISO 字符串。自动建源固定 `tier=T2`、`participation_mode=isolated`、间隔 1440 分钟。
+
+### 11.3 修订后的实施批次
+
+| 批次 | 内容 | 状态 |
+|---|---|---|
+| 1a | `site/site.ts` 站点身份 + 09:30 | ✅ 已提交 `5c12b06` |
+| 1b | `industry/taxonomy.ts` 加 4 类 + 金融词表/主体词典；`section` 改两节；`prompts/` 五份联动（prefilter / structure / content-understanding / selection-score / rules-domain）；`selection.ts` 加类别；`topics.json` 金融主题组；`wording.ts` 金融禁用词 | ✅ 已完成：`typecheck` 0 错误，38 个 DB 测试全过 |
+| 2 | `sources.json` 免费套餐 + 反哺契约 + 盘峰节流说明；`site/public/` 已查证为运行时填充，无需改 | 进行中 |
+| 3 | `modules/board/`：`module.ts` / `server.ts`（board 接口）/ `web.tsx` / `ai.tsx` / `finance.tsx` / 清单注册 / Dockerfile | 待做 |
+| 4 | 品牌报头、changelog、SelectBench 校准、公众号导流 | 待做 |
+
+验证基线补充：独立测试需先 `npm run build -w @aihot/web`；本机 6 并发时 web 冷启动会撞 `web-server.ts` 的 15 秒超时，验证时降到 1–2 并发。DB 测试容器 `dailyhot-test-pg` 映射 `127.0.0.1:55432`，`DATABASE_URL=postgres://postgres:testpass@127.0.0.1:55432/dailyhot_test`。
+
+---
+
+## 12. 批次 1 落地记录（2026-11-05）
+
+### 12.1 实际交付
+
+- **分类**：10 类（6 个 AI 细分类 key 原样保留 + 新增 `finance-policy` / `finance-a` / `finance-us` / `finance-view`）；`section` 合并为「AI 大事」「金融市场」两节；`RELEASE` 仍指向 `ai-models` +「模型发布」。
+- **词表**：`CATEGORY_TAGS` 22 个、`TOPIC_TAGS` 29 个、`ENTITY_TAGS` 23 个，`TAG_SYNONYMS` 补金融近义词；提示词的标签白名单已同步。
+- **主体**：`ENTITIES` 28 个（新增 10 个金融机构/龙头）、`IDENTITY_LEXICON` 45 条、`PUBLISHER_DOMAINS` 17 条。**三者的金融 id 统一为无前缀 slug**（`csrc` / `sse` / `szse` / `pboc` / `fed` / `sec` / `tsmc` / `apple` / `tesla` / `broadcom`），与 `topics.json` 的 `entityId` 一致；重复的 `apple` 条目已合并；仅用于防误认、没有主题页的条目用独立 id（`moutai` / `catl` / `innolight` / `stock-code`）。
+- **门槛**：保留默认 `T1 60 / T1_5 65 / T2 76`，新增 `finFlash 72` / `finCommentary 78` 两个信源类别下限（**需在后台逐源设置，seed 不写此字段**）。
+- **主题**：61 个主题、3 组（公司机构与标的 / 技术方向与市场 / 内容类型）。
+- **用词**：`wording.ts` 三条金融禁用规则（荐股口吻、情绪化涨跌词、无来源传闻）。
+- **测试夹具**：`category-corrections.test.ts` 改成「AI → 金融」跨板块纠错（验证行为不变：原子修订、不重选、不触发推送、撤销可还原）；`report-recovery.test.ts` 分节名换成「AI 大事」。
+
+### 12.2 校验结果
+
+| 项 | 结果 |
+|---|---|
+| `npm run typecheck` | ✅ 0 错误（Node 24.22.1） |
+| 词表一致性脚本 | ✅ 分类 10 / 主体 28 / 身份词条 45 / 主题 61 / 发布域 17；无重复 id、无悬空 entityId、displayTag 全在白名单 |
+| DB 测试（6 个受影响文件，1 并发） | ✅ 38/38 通过：`analyze`、`public-categories`、`category-corrections`、`report-recovery`、`selected-card`、`topics` |
+| `npm run build -w @aihot/web` | ✅ 通过（批次 1a 已验证） |
+
+### 12.3 实施中新增查证（原方案未覆盖）
+
+1. **`site/public/` 三个文件无需修改**：`robots.txt` / `manifest.webmanifest` / `openapi-v1.json` 的 `{{siteName}}` / `{{siteUrl}}` / `{{dailyTime}}` / `{{categories}}` 等占位符由 `apps/api/src/routes/static.ts` 的 `fillPlaceholders()` 运行时填充；`{{categories}}` 在 JSON 的 `enum` / `examples` 里自动展开为 `PUBLIC_API_CATEGORY_KEYS`。`site.ts` 的 `PUBLIC_CATEGORIES.merge` 为空，10 个分类（含新增 4 个金融类）自动进入公开 API、RSS、MCP 枚举。原方案「四个固定文件占位符要替换」作废。
+2. **`interval_minutes` 不能当节流手段**：`packages/backend/src/sources/collect.ts` 每天 04:20 按近 7 天产出自动调整到 15–180 分钟，seed 里的值只是初值。盘峰节流交给 `external` 反哺脚本控速，或用后台暂停信源。
+3. **`external` 源可在 seed 里预置并直接设为 `editorial`**：`scripts/seed.ts` 支持 `kind: "external"`，`config: {}` 能通过 `assertSupportedConfig`，`collect.ts` 不会主动抓它。文档所说「自动建源默认不进公开页面」是运行时自动建源的行为，预置源可显式给 `participation_mode: "editorial"`。
+4. **`publishedAtUtcOffset` 是 `rss` / `web_list` / `json_list` 的合法配置项**，但只对不带时区的日期生效，且固定偏移无法跟随美东夏令时。已验证 5 个海外金融 RSS 均自带时区，不设置更准确。
+
+### 12.4 仍待补的两项（不能代写）
+
+1. **变现路径**（立项三项缺一不可，目前只有「命中痛点：搞钱」与「目标用户」）；
+2. `site/pages/terms.md` / `privacy.md` 的正文（AGENTS.md 要求本人确认）。

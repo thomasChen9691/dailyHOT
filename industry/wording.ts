@@ -2,4 +2,9 @@
 // 写作那一步写完中文标题、摘要和推荐理由后逐个查，用了就让模型只改这些地方一次（packages/backend/src/editorial/
 // analyze.ts 的 mendWording）。只列一眼就能判断的写法：拿不准的不列，否则会误改正常的词。空着就不查。
 
-export const READER_WORDING: ReadonlyArray<readonly [RegExp, string]> = [];
+// 本站同时收录 AI 与财经：财经稿尤其要压掉荐股口吻、情绪化涨跌词和无来源的传闻说法。
+export const READER_WORDING: ReadonlyArray<readonly [RegExp, string]> = [
+  [/必涨|必跌|稳赚|包赚|翻倍股|满仓|抄底|梭哈|上车|牛股|妖股|金股/u, "不要写荐股、买卖建议或收益承诺，只陈述已披露的事实与数字"],
+  [/重磅利好|重大利好|史诗级|炸裂|沸腾|狂欢|血洗|崩盘/u, "不用夸张或情绪化的说法，直接写发生了什么、原文给出多少数字"],
+  [/网传|据传|有消息称|知情人士透露/u, "不要转述无来源传闻；只写能核对的公告、决议或原始披露，没有就删掉这一句"],
+];

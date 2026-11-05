@@ -17,10 +17,15 @@ export const SELECTION = {
    * 只抬不降：分级门槛本来就更高的（媒体）不受影响。没有类别的信源只按分级。
    *   ecosystem 生态与基础设施：芯片与硬件、推理与云服务、模型托管、开发框架与工具链、安全研究厂商、工程与开发者博客
    *   leaderboard 评测榜单：给各家模型跑分、排名的评测机构
+   *   finFlash 财经快讯：滚动快讯、行情播报、盘后流水账类信源；这类源重复转发与无增量内容多，门槛抬高
+   *   finCommentary 市场评论：观点、复盘、荐股嫌疑较高的自媒体源；只抬不降，压住噪声
+   * 注意：selection_class 不在 industry/sources.json 里（seed 会忽略），需在后台「信源」页逐源设置。
    */
   classes: {
     ecosystem: { label: "生态与基础设施", threshold: 70 },
     leaderboard: { label: "评测榜单", threshold: 76 },
+    finFlash: { label: "财经快讯", threshold: 72 },
+    finCommentary: { label: "市场评论", threshold: 78 },
   } as Record<string, { label: string; threshold: number }>,
   /**
    * 没入选、但平均分高于这个数的资料，也用精选的写法（内容理解：标题、摘要、推荐理由）来写，

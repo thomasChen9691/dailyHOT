@@ -18,9 +18,9 @@
 - `opinion_analysis`：观点、行业判断、复盘或长访谈
 - `tutorial_explainer`：教程、科普、解读或评测
 
-优先级：发了模型选 model_release；发了工具选 product_launch；发了 Prompt 或方法选 tool_or_prompt；论文优先 research_paper；评测选 tutorial_explainer。原文把发布写成过去的事、本条在讲用法或做演示时，不算本次发布，选 tutorial_explainer。
+优先级：发了模型选 model_release；发了工具选 product_launch；发了 Prompt 或方法选 tool_or_prompt；论文优先 research_paper；评测选 tutorial_explainer。原文把发布写成过去的事、本条在讲用法或做演示时，不算本次发布，选 tutorial_explainer。财经资料统一按下列映射选同一组类型：正式公告、财报、监管规则、利率决议、指数调整、分红回购、并购 IPO、可核实的市场异动选 `industry_event`；市场分析、判断、复盘、盘后流水账选 `opinion_analysis`；金融工具或数据用法讲解选 `tutorial_explainer`。
 
-输出前检查 `itemType` 与第一个分类标签是否自洽：`model_release` 对应“模型发布”，`product_launch` 对应“产品更新”，`research_paper` 对应“论文/研究”，`industry_event` 对应“行业动态”或“政策/监管”，`opinion_analysis` 对应“大佬观点”或“现象/趋势”，`tutorial_explainer` 对应“教程/实践”或“评测/基准”。如果二者冲突，按当前材料的核心事件修正后再输出。
+输出前检查 `itemType` 与第一个分类标签是否自洽：`model_release` 对应“模型发布”，`product_launch` 对应“产品更新”，`research_paper` 对应“论文/研究”，`industry_event` 对应“行业动态”“政策/监管”“财报/业绩”“监管/规则”“公司公告”“市场异动”“指数/成分”“货币/利率”“分红/回购”“并购/IPO”“资本开支”，`opinion_analysis` 对应“大佬观点”“现象/趋势”以及归在「市场观点」的材料，`tutorial_explainer` 对应“教程/实践”或“评测/基准”。如果二者冲突，按当前材料的核心事件修正后再输出。
 
 ## 作者角色
 
@@ -32,14 +32,16 @@
 
 ## 标签
 
-`tags` 输出 1–6 个字符串。第一个必须从以下分类标签中选一个：模型发布、产品更新、开源/仓库、论文/研究、教程/实践、大佬观点、评测/基准、安全/对齐、现象/趋势、行业动态、政策/监管、非AI/通用工具、其他。
+`tags` 输出 1–6 个字符串。第一个必须从以下分类标签中选一个：模型发布、产品更新、开源/仓库、论文/研究、教程/实践、大佬观点、评测/基准、安全/对齐、现象/趋势、行业动态、政策/监管、非AI/通用工具、其他、财报/业绩、监管/规则、市场异动、指数/成分、货币/利率、资本开支、并购/IPO、分红/回购、公司公告。
 
 其后可选 0–5 个适用标签，并且只能来自以下两个白名单：
 
-- 主题：Agent、编码、推理、多模态、语音、视频、图像生成、RAG、端侧、数据/训练、搜索、部署/工程、开源生态、具身智能、MCP/工具调用
-- 实体：OpenAI、Anthropic、DeepSeek、DeepMind、Google、Meta、Microsoft、xAI、Hugging Face、GitHub、arXiv
+- 主题：Agent、编码、推理、多模态、语音、视频、图像生成、RAG、端侧、数据/训练、搜索、部署/工程、开源生态、具身智能、MCP/工具调用、A 股、美股、港股、美联储、SEC、ETF、半导体、红利低波、可转债、汇率、利率、财报、算力资本开支、出口管制
+- 实体：OpenAI、Anthropic、DeepSeek、DeepMind、Google、Meta、Microsoft、xAI、Hugging Face、GitHub、arXiv、NVIDIA、TSMC、Apple、Tesla、Broadcom、证监会、上交所、深交所、央行、美联储、SEC、东方财富
 
-正文中即使明确出现了 NVIDIA、Apple、阿里等其他实体，也不要把它们放进 `tags`。不要创造白名单之外的标签。没有适用的主题或实体时，只返回第一个分类标签；例如学校限制 AI 使用的监管新闻，不需要强行归到“编码”或“推理”。
+正文中即使明确出现了其他公司、股票代码或机构，也不要把白名单之外的名字放进 `tags`。不要创造白名单之外的标签。没有适用的主题或实体时，只返回第一个分类标签；例如一则没有具体主体的利率决议，不需要强行归到“A 股”或“美股”。
+
+财经资料的标题与摘要必须忠实保留原文的公司名、证券代码、金额、比例和日期，不得把原文没有的数字或机构补进来；遇到"网传""据传"而无正式披露时，`editorialJudgment` 返回空字符串，不替材料补一个结论。
 
 ## 候选阅读价值
 
