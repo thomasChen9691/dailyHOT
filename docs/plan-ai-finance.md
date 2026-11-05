@@ -346,11 +346,11 @@ node scripts/smoke.ts --base http://localhost:3000               # 站点起来�
 | `package.json` | `@aihot/board`，`exports` 暴露 `./module` / `./server` / `./web` 三个插口 |
 | `boards.ts` | 两个板块的 `section` / 标题 / 描述；`isBoardKey()` 做运行时白名单校验 |
 | `module.ts` | `pages: [{ path: "ai", file: "web/ai.tsx" }, { path: "finance", file: "web/finance.tsx" }]` |
-| `server.ts` | `GET /api/board/:board`，`loadBoard()` 按 section 合并多分类的分页只读查询 |
+| `server.ts` | `GET /api/board/:board`，`loadBoard()` 按 section 合并多分类的分页只读查询；`sitemap.entries` / `llms.pages` 两个机器出口（见 13.7） |
 | `web.tsx` | `sidebar`（桌面侧栏「内容」组两项）+ `tools`（「我的」页两行） |
 | `web/ai.tsx` / `web/finance.tsx` | 两个独立 SSR 路由，各自 `loader` / `meta` / `headers` |
 | `web/BoardView.tsx` | 共享视图，复用 `DayList` / `Pagination` / `EmptyState` / `beijingTime` |
-| `tests/boards.standalone.test.ts` | 2 条守护测试：板块分节必须存在于 `CATEGORIES`、互不重复、无分类漏在两板之外 |
+| `tests/boards.standalone.test.ts` | 3 条守护测试：板块分节必须存在于 `CATEGORIES`、互不重复、无分类漏在两板之外；模块必须登记 `sitemap` / `llms` 出口且覆盖两页 |
 
 注册与构建侧改动：
 
@@ -377,11 +377,12 @@ node scripts/smoke.ts --base http://localhost:3000               # 站点起来�
 |---|---|
 | `npm run typecheck` | ✅ 0 错误（`loadBoard` 导出后、`smoke.ts` 改动后各跑一次，均 `TYPECHECK_EXIT=0`） |
 | `npm run build -w @aihot/web` | ✅ 通过，SSR bundle 内含 `api/board/ai` |
-| `modules/board/tests/boards.standalone.test.ts` | ✅ 2/2 通过 |
+| `modules/board/tests/boards.standalone.test.ts` | ✅ 3/3 通过（补出口断言后重跑） |
 | `tests/architecture.test.ts` | ✅ 14/14 通过（web 不 import backend、模块间不互相 import、公共读取层等约束未被破坏） |
 | 直连测试库执行 `loadBoard()` | ✅ `ai` / `finance` 两条 SQL 均正常返回（`SQL_OK`）；空库场景 `pageCount=1 / total=0` |
 | 手工 SSR（Mock API + 真实 web server） | ✅ `/ai`、`/finance` 均 `status=200`，含板块标题与条目 |
 | 按 `smoke.ts` 断言条件复验 | ✅ 两页 HTML 含站名「枫泽观潮」（`siteName=true`）；两个接口 `content-type: application/json`；`SMOKE_LIKE_OK` |
+| 直连测试库校验机器出口 | ✅ 两页出现在 `loadDiscoveryEntries()` 且 `section=board`、`priority=0.8`；`llmsTxt()` 输出两行板块页链接；`EXITS_OK` |
 
 ### 13.4 已知的非代码失败：web server 15 秒启动超时
 
@@ -403,4 +404,25 @@ node scripts/smoke.ts --base http://localhost:3000               # 站点起来�
 
 ### 13.6 提交节奏
 
-批次 3 单独提交，含 `modules/board/` 全部新文件、`scripts/smoke.ts`、三份清单、`site/package.json`、`Dockerfile`、`package-lock.json`、`docs/plan-ai-finance.md`。`.workbuddy/`（工作区记忆）保持未跟踪，不纳入提交。
+- 批次 3 主体已提交 `58368a2`，含 `modules/board/` 全部新文件、`scripts/smoke.ts`、三份清单、`site/package.json`、`Dockerfile`、`package-lock.json`、`docs/plan-ai-finance.md`。
+- 13.7 的完工审计修复另起一个 `fix` commit（不 amend，保持「每批单独提交」）。
+- `.workbuddy/`（工作区记忆）保持未跟踪，不纳入提交。
+
+### 13.7 完工审计发现：两个机器出口原本漏登记
+
+提交后按「先查出口完整性、再收口」复核，发现两处 smoke 200 检查照不到的遗漏：
+
+| 出口 | 代码依据 | 未登记的后果 | 处理 |
+|---|---|---|---|
+| `sitemap.xml` | `packages/backend/src/publication/sitemap.ts:110` 的 `loadDiscoveryEntries()` 只硬编码引擎页面，模块页只能经 `serverModules()` 的 `m.sitemap.entries()` 加入；`sectionOf()` 会把模块条目分到 `<module.name>.xml` | `/ai`、`/finance` 只有导航入口、不进站点地图，与方案第 0 节「独立路径可索引、适合导流」的目标不符 | 在 `modules/board/server.ts` 实现 `sitemap.entries`，返回两条 `loc`，`changefreq: hourly`、`priority: 0.8` |
+| `llms.txt` | `packages/backend/src/publication/llms.ts:122` 的「网站主要页面」只 `push(...opts.modules.pages)`，模块经 `ServerModule.llms()` 注入 | Agent / 大模型抓不到两个板块页的入口说明 | 实现 `llms()` 返回两行 `- [板块名](绝对地址): 板块描述`，用 `siteUrl()` 生成，与其他行一致 |
+
+补充结论：
+
+- **内容身份不伪造时间**：`revision` 用与首屏同一批可见条目（前 `POOL_PAGE_SIZE = 40` 条）的 `article_id:revision` 聚合 md5，不写 `lastmod`；与 `sitemap.ts` 顶部「集合页用内容身份而非臆造修改时间」的约定一致。空库时 `revision` 为空串，实测正常。
+- `robots.txt` 的 `Disallow: /api/` 会盖住 `/api/board/*`，这是**预期**：它是 web SSR 内部调用的接口，不该被爬虫当重复内容抓；`Allow: /api/v1/` 与 `Allow: /api/mcp` 是公开出口的例外。因此不改 `robots.txt`，也不把 `/api/board/*` 写进 `llms.txt` 的公开 API 列表。
+- `/api/*` 由 `packages/contracts/src/http-policy.ts` 的 `/^\/api\//` 归给 api 进程，模块无需声明 `apiPaths`（复核确认原判断成立）。
+- `boards.standalone.test.ts` 新增第 3 条断言，动态 import `server.ts` 检查 `sitemap` / `llms` 出口存在且覆盖两页；该条冷启动约 18 秒（后端模块图加载），但 standalone 的 `--test-timeout` 是 120 秒，不受 `web-server.ts` 那个 15 秒限制。
+- 校验：`typecheck` 0 错误；模块 standalone 3/3 通过；直连测试库 `EXITS_OK`（两页 `section=board` / `priority=0.8`，`llmsTxt()` 输出两行）。
+
+**仍留在 deferred 的出口项**：RSS 只有按分类的 `/feed/category/<key>.xml`（10 个细分类），没有「整个板块」的合成 feed。若后续需要 `/feed/ai.xml` 这类板块订阅，要另做模块级 feed 路由，本批不做。
