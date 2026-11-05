@@ -1,6 +1,6 @@
 # 定制方案：AI × 金融 双板块热点站
 
-> 状态：**4 项已拍板（第 10 节）+ 分类体系修订已确认（第 11 节）+ 立项三项已齐全（第 9 节，变现路径＝暂不变现、自用免费完全版）；批次 1–3 已全部落地**，落地记录见第 12、13 节。当前主线是跑通端到端逻辑；批次 4 的品牌 / 导流类工作按自用定位降级；每批单独提交。⚠️ 全量复跑发现 **1 处真实回归**（`daily-report-alerts.test.ts` 夹具仍按旧出刊时间 08:00 写死，见 13.8），P0 修复方案待确认。
+> 状态：**4 项已拍板（第 10 节）+ 分类体系修订已确认（第 11 节）+ 立项三项已齐全（第 9 节，变现路径＝暂不变现、自用免费完全版）；批次 1–3 已全部落地**，落地记录见第 12、13 节。当前主线是跑通端到端逻辑；批次 4 的品牌 / 导流类工作按自用定位降级；每批单独提交。全量复跑发现的 **1 处真实回归已修复**（`daily-report-alerts.test.ts` 夹具改为从 `EDITION_TIMES.daily` 派生时钟，提交 `89d3774`，见 13.8）；放宽超时复跑后 `standalone` **244/244 全绿**，其余失败已归因为环境问题（见 13.9）。
 > 日期：2026-11-05　｜　基线：`Initial commit`（AIHOT 开源引擎的未定制副本，站名 MyHOT）
 > 校验基线：Node 24.22.1 / npm 11.19.1，`npm ci` 298 包；未改代码前 `npm run typecheck` 通过；`npm run build -w @aihot/web` 通过。独立测试需先构建 web；本机 6 并发时 web server 冷启动会撞 15 秒超时，实测单进程启动约 6 秒，故验证时降并发。DB 测试已用独立容器 `dailyhot-test-pg`（127.0.0.1:55432）跑通单文件。
 
@@ -393,12 +393,12 @@ node scripts/smoke.ts --base http://localhost:3000               # 站点起来�
 - 全量 `test:standalone` / `npm run test:web` 在当前机器负载下仍会报 `web did not start`，**这是环境性能问题，不是模块代码错误**；
 - 已用单文件低并发、手工起站（超时放宽到 60/90 秒）绕开该限制完成等价验证；
 - `canonical=false` 是手工脚本把 `SITE_URL` 设为 `http://127.0.0.1:0` 导致的字符串不匹配，不影响页面 200 与内容渲染；
-- **不改框架超时常量**（避免与上游冲突）；低负载环境复跑全量测试即可。
+- **不改框架超时常量**（避免与上游冲突）；已用「临时放宽 → 复跑 → 还原」取得真实通过数：`standalone` **244/244 全绿**，仓库最终零改动（见 13.9）。
 
 ### 13.5 本批未做 / 顺延项
 
 1. Docker 起站 + `node scripts/smoke.ts --base http://localhost:3000`：需要本人本地 `.env`（`ADMIN_PASSWORD` / `SESSION_SECRET` / `IMG_PROXY_SIGN_SECRET` / `INGEST_TOKEN`），按约定不代填；
-2. 全量 `test:standalone` / `test:web` / 全量 DB `npm test` 在低负载环境复跑；
+2. 全量 `test:web` / 全量 DB `npm test` 仍需在有 **PostgreSQL 客户端（`pg_dump`）** 与正常 Playwright 浏览器的环境（CI 或 Docker 镜像内）复跑；本机已确认缺 `pg_dump`、浏览器组会挂起，结论见 13.9；
 3. 浏览器逐项核对桌面侧栏、手机底栏、「我的」入口、分页与空态；`smoke.ts` 只保证 200 与站名，不覆盖视觉；
 4. 后台逐源给财经快讯 / 市场评论类信源设置 `finFlash` / `finCommentary` 类别；
 5. 批次 4：品牌报头 / favicon / changelog、SelectBench 门槛校准、盘峰节流落到反哺脚本；**二维码 / 公众号导流按「自用免费完全版」定位降级，暂不做**；
@@ -441,25 +441,50 @@ node scripts/smoke.ts --base http://localhost:3000               # 站点起来�
 
 单跑对照：`modules/board/tests/boards.standalone.test.ts` **3/3 通过**；`tests/page-metadata.standalone.test.ts` 单跑**仍**撞 15 秒启动超时（此前低负载时曾单跑通过），说明当前机器即使单文件也扛不住这个硬编码超时。
 
-#### 真实回归（P0，待确认后修）
+#### 真实回归（P0，已修复，提交 `89d3774`）
 
 - **现象**：`tests/daily-report-alerts.test.ts` 单跑 4/4 失败，actual 比 expected 少当天那期日报（如 `actual: ["report.daily:2026-10-06"]` vs `expected: [..., "report.daily:2026-10-07"]`），`:expired` / `:recovered` 消息也未出现。
 - **根因**：`packages/backend/src/operations/alerts.ts:471` 的逾期判定是 `now >= beijingAt(date, EDITION_TIMES.daily) + 2 * 3600_000`。原 `daily: "08:00"` → 逾期边界 10:00，测试第 9 行 `const at = (date, time = "10:00")` 正好卡在边界；批次 1a 把 `EDITION_TIMES.daily` 改成 **09:30** 后，边界移到 **11:30**，测试里的 09:59 / 10:00 / 10:10 / 10:20 / 10:30 / 12:00 全部落在 2 小时宽限期内，于是「当天日报缺失」的告警不再触发。
 - **为什么批次 1 没抓到**：当时只跑了按分类 / 分节名筛出的 6 个「受影响」DB 文件（analyze、public-categories、category-corrections、report-recovery、selected-card、topics），**没有覆盖依赖 `EDITION_TIMES` 的告警 / 排期类测试**。这是筛选口径的漏洞，不是测试框架的问题。
 - **影响面**：仅测试夹具与站点配置脱节；线上告警规则本身按 09:30 + 2h 正确工作（11:30 判逾期）。但测试红了就不能算收口。
 
-#### 建议修复方案（只改夹具，规则一行不动）
+#### 已实施的修复（只改夹具，规则一行不动）
 
-| # | 动作 | 落点 | 复杂度 |
+| # | 动作 | 落点 | 结果 |
 |---|---|---|---|
-| P0-1 | 从 `EDITION_TIMES.daily` 派生测试时钟：`逾期时间 = 出刊时间 + 120 分钟`；把 `at()` 默认参数与 09:59 / 10:10 / 10:20 / 10:30 / 12:00 等硬编码时刻改成相对偏移（保持原有先后关系） | `tests/daily-report-alerts.test.ts` | 低，约 10 行 |
-| P0-2 | 单跑该文件 4/4 通过；再单跑 `report-recovery` / `category-corrections` 确认无连带影响 | 测试库 `dailyhot-test-pg` | 低 |
-| P0-3 | 排查是否还有其他硬编码时刻依赖 08:00：全仓搜 `EDITION_TIMES` / `"10:00"` / `"08:00"` 的测试文件，逐一确认 | `tests/`、`apps/*/tests/` | 中 |
-| P1 | 把「改 `site/site.ts` 的 `EDITION_TIMES` 必须同步检查告警 / 排期测试」写进交付检查单 | 本文档 + `.workbuddy/memory/MEMORY.md` | 低 |
+| P0-1 | 从 `EDITION_TIMES.daily` 派生测试时钟：`逾期时间 = 出刊时间 + 120 分钟`；把 `at()` 默认参数与 09:59 / 10:10 / 10:20 / 10:30 / 12:00 等硬编码时刻改成相对偏移（保持原有先后关系） | `tests/daily-report-alerts.test.ts` | ✅ 已做：`clock()` + `GRACE_MINUTES` 派生相对分钟偏移；与出刊无关的深夜 / 凌晨绝对时刻（`"23:30"` / `"00:10"`）保留字符串入参 |
+| P0-2 | 单跑该文件 4/4 通过；再单跑 `report-recovery` / `category-corrections` 确认无连带影响 | 测试库 `dailyhot-test-pg` | ✅ 告警 **4/4**、连带 **15/15**；告警日志「缺期从 10 月 1 日 **11:30** 起」确认时钟跟随 09:30 |
+| P0-3 | 排查是否还有其他硬编码时刻依赖 08:00：全仓搜 `EDITION_TIMES` / `"HH:MM"` / `beijingAt` / 时间字面量 | `tests/`、`apps/*/tests/` | ✅ **只有这一个测试依赖出刊时刻**；其余时间字符串全是日期解析 / RSS 报文 / ISO 数据夹具，与出刊时间无关 |
+| P1 | 把「改 `site/site.ts` 的 `EDITION_TIMES` 必须同步检查告警 / 排期测试」写进交付检查单 | 本文档 + `.workbuddy/memory/MEMORY.md` | ✅ 见下方「交付检查单」 |
 
-**按约定先不动代码**，等你确认方案后再实施（每步单独校验、单独提交）。
+**同时修掉一处编译错误**：完工审计新增的第 3 条守护断言写成 `server.llms?.().pages`，但接口签名是 `() => LlmsLines | Promise<LlmsLines>`，`tsc` 报 `TS2339` / `TS7006`；改为 `(await server.llms?.())?.pages ?? []`。这是上一批 `c9ad8a9` 带入的，**此前误报 typecheck 通过**——后台任务的 shell 退出码取的是最后一条 `tail`，不是 `tsc`。重跑 `npm run typecheck` 确认 **0 错误**。
+
+> 验证汇总：`typecheck` 0 错误；模块守护测试 3/3；告警 4/4；连带 15/15。已单独提交 `89d3774`。
+
+#### 交付检查单（P1，长期生效）
+
+改 `site/site.ts` 的 `EDITION_TIMES` 时，除按分类 / 分节名筛受影响测试外，**必须额外单跑** `tests/daily-report-alerts.test.ts`（告警）、排期相关测试、`report-recovery.test.ts` 与 `category-corrections.test.ts`；测试时钟一律从 `EDITION_TIMES` 派生，不写死 `10:00` 这类与配置耦合的时刻。
 
 #### 环境侧的结论
 
 - 全量连跑时 `web` 冷启动越到后段越慢，15 秒硬编码超时在**单并发**下仍会触发，不只是并发竞争；`page-metadata` 单跑现在也过不了。
-- 可选做法：临时把 `apps/web/tests/web-server.ts:84` 的 `15_000` 与 `tests/mcp-host.standalone.test.ts:180` 的 `timeout: 10000` 放宽后复跑、跑完还原（仓库最终不改），或放到 CI / 低负载机器跑。**本轮未采用**，避免掩盖真实回归。
+- 已按拍板方案采用「临时放宽 → 复跑 → 还原」：`web-server.ts:84` 的 `15_000 → 120_000`、`mcp-host.standalone.test.ts:180` 的 `10000 → 60000`，单并发复跑 standalone + web 两组取真实通过数，**跑完立即还原，仓库最终不留任何改动**。结果见 13.9。
+
+### 13.9 放宽超时后的复跑结果（2026-11-05）
+
+按拍板方案临时放宽 `apps/web/tests/web-server.ts:84` 的 `15_000 → 120_000`、`tests/mcp-host.standalone.test.ts:180` 的 `10000 → 60000`，单并发串行复跑，**跑完已还原，仓库不留改动**（`git diff` 只剩本文档）。
+
+| 组 | 放宽后结果 | 结论 |
+|---|---|---|
+| `test:standalone` | **244 / 244 通过，0 失败** | 上一轮 15 个失败**全部**是环境超时（14 个 15 秒启动 + 1 个 10 秒子进程），**零断言失败** |
+| `test:web` | 跑 3 小时 43 分钟未完成，主动停止；已输出的 2 条均为 Playwright 浏览器布局测试失败 | 本机浏览器环境无法稳定跑完整组，**不能作为代码质量证据** |
+| `tests/backup.test.ts`（单跑） | 14 tests / 1 pass / **13 fail**，根因 `Error: spawn pg_dump ENOENT` | **本机没有 PostgreSQL 客户端工具**，纯环境缺失，与本次改动无关；全量 DB 后段那 16 个 5–66 ms 的短耗时失败即此因 |
+
+**web 组暴露的 2 个非超时失败**（未改动任何布局 / 样式，与板块页无关）：
+
+- `a short laptop window keeps several outline entries and can reach the last one`（27 ms）
+- `outline keyboard scrolling stays inside its boundary in WebKit`（18 s）
+
+两者都是 outline / 布局类 Playwright 测试，需要正常的无头浏览器与渲染环境；本机当前不具备。
+
+**结论**：环境性失败已全部归因清楚（启动超时 / 缺 `pg_dump` / 浏览器环境），**真实回归只有 `daily-report-alerts` 一处且已修**。全量 `test:web` 与全量 DB `npm test` 仍需在有 PostgreSQL 客户端与正常浏览器的环境（CI 或 Docker 镜像内）复跑，本机不再重复消耗时间。
