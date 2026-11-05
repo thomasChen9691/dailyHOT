@@ -114,15 +114,61 @@
 
 ## 5. 信源与既有自动化集成（免费源原则）
 
-框架六种信源：`rss`、`web_list`、`json_list`、`x_search`（SocialData **付费**）、`mp_account`（极致了 **付费**）、`external`（外部推送）。**本方案只开前三种 + external**，付费的 X / 公众号 / Jina / Embedding 全部不配，预算熔断保持默认。
+框架六种信源：`rss`、`web_list`、`json_list`、`x_search`（SocialData **付费**）、`mp_account`（极致了 **付费**）、`external`（外部推送）。**本站只用 `rss` + `external`**，付费的 X / 公众号 / Jina / Embedding 全部不配，预算熔断保持默认；所有源 `site_fulltext` / `syndicate_fulltext` 全关。
 
-| 板块 | 建议源（免费、公开） | 分级 / 形态 |
+### 5.1 已落地（批次 2，`industry/sources.json` 共 24 源）
+
+| 板块 | 源 | 分级 | 说明 |
+|---|---|---|---|
+| AI | 18 个示范 RSS（OpenAI / DeepMind / Google Research / Hugging Face / Microsoft Research / NVIDIA / AWS ML / GitHub AI / Mistral / BAIR / The Verge AI / TechCrunch AI / Ars Technica / MIT Tech Review / The Decoder / Simon Willison / Import AI / Latent Space） | T1 官方 + T2 媒体个人 | 全部保留，可在后台精简到约 12 个 |
+| 金融 · 官方一手 | `federalreserve.gov/feeds/press_monetary.xml`、`sec.gov/news/pressreleases.rss` | T1 | 已实测 200 可达；`owner_entity_id` = `fed` / `sec`，与 `PUBLISHER_DOMAINS` 一致 |
+| 金融 · 媒体 | CNBC Finance (`10000664`)、CNBC Earnings (`15839135`)、MarketWatch MarketPulse | T2 | 已实测 200 可达、各 30 条；刻意避开综合 Top News，减少非金融噪声 |
+| A 股 / 中文财经 | `external-fengze-daily`（`kind: external`，`participation_mode: editorial`，`tier: T1_5`，`config: {}`） | T1_5 | 由 09:15 自动化反哺供稿，框架不主动抓取 |
+
+### 5.2 为什么 A 股中文源没有直接预置
+
+2026-11-05 逐个实测，**没有一个是可直接写死选择器的稳定源**：
+
+| 目标 | 实测地址 | 结果 |
 |---|---|---|
-| AI | OpenAI / DeepMind / Anthropic / Hugging Face / GitHub AI 官方博客；TechCrunch AI、The Verge AI、Ars Technica、MIT Tech Review、Import AI、Simon Willison | T1 官方 / T2 媒体个人，`rss` |
-| 金融 | 新华社财经、证监会与沪深交易所公告（网页列表）、央行 / 统计局、东方财富公告与快讯、腾讯财经、天天基金公告 | T1 一手 / T2 媒体，`rss` + `web_list` + `json_list` |
-| 复用 | 现有「AI 与财经每日要闻（融合）」自动化把已采到的条目经 `POST /api/ingest/items` 推进站（`kind: external`，`INGEST_TOKEN`） | 不重复抓取、不新增付费依赖 |
+| 新华社财经 | `xinhuanet.com/fortune/` | 580 字节纯 JS 跳转页，无新闻节点 |
+| 证监会 | `csrc.gov.cn/csrc/c100028/common_list.shtml` | 200，但返回 2021 年组织机构页，栏目 ID 不对 |
+| 上交所公告 | `sse.com.cn/disclosure/listedinfo/announcement/` | 200，页面注释「获取栏目 id 页」，列表疑似前端渲染 |
+| 央行 | `pbc.gov.cn/goutongjiaoliu/113456/113469/index.html` | 200 且含当日日期，服务端渲染；选择器仍需在后台「预览抓取」确认 |
+| 东方财富快讯 | `np-listapi.eastmoney.com/.../getNewsByColumns` | 缺必填 `req_trace` 参数，接口约定易变 |
+| Anthropic News | `anthropic.com/news/rss.xml` | 404，故未落地（原建议清单里的这一项作废） |
 
-注意：中文网页发布时间常不带时区，按信源时区读（默认 `+08:00`，只认 `config.publishedAtUtcOffset` 的固定 UTC 偏移）；`CST` 按北京时间。海外 AI 源若在大陆服务器上抓，需 `EGRESS_PROXY_URL`。**`interval_minutes` 只是初值，每天 04:20 会按近 7 天产出自动调整到 15–180 分钟，写死它并不能做盘峰节流**；开盘时段应由 `external` 反哺脚本控制推送节奏，或在后台暂停信源。模型侧用后台「付费请求上限」做熔断，`COLLECT_ENABLED` / `MODEL_CALLS_ENABLED` 在调界面时设 `false`。
+`docs/sources.md` 要求「先预览，再创建」，`web_list` 也不执行 JS。把未经预览的选择器写进 seed 会产生一批抓不到内容的假信源，因此改为：**A 股内容由 `external` 反哺覆盖**（现有自动化已在采集这些源），中文站点留作后台逐个「预览抓取」确认后的可选增强。
+
+### 5.3 反哺契约（`external-fengze-daily`）
+
+```
+POST /api/ingest/items
+Authorization: Bearer <INGEST_TOKEN>
+Content-Type: application/json
+
+{
+  "sourceId": "external-fengze-daily",
+  "sourceName": "枫泽观潮 · 每日要闻反哺",
+  "items": [
+    { "title": "必填", "url": "必填", "publishedAt": "2026-11-05T08:00:00+08:00", "author": "可选" }
+  ]
+}
+```
+
+- `INGEST_TOKEN` 在 `.env` 里本地填写，≥16 位；不设则接口恒 401。**不写进仓库、不经聊天传递**。
+- 每次最多 50 条（超了 413）；`docker compose` 下 `INGEST_RATE_LIMIT` 默认 10 次/分钟（429 带 `Retry-After: 60`）。
+- **不接受 category / tags**：分类与首标签由站内 `structure.md` 流程生成；条目只有 `title` / `url` / `publishedAt` / `author` / `raw`。
+- `publishedAt` 必须传带时区的 ISO 字符串；`raw._aihot.backfill: true` 按历史回灌处理（不进「今天」、不推送）。
+- 时间关系：09:15 HKT 推送 → 09:30 出日报，当天新内容当天见报；CSV 全量留痕不动，HTML 仍只展示 ≤50 条最重要的。
+- seed 已把该源预置为 `editorial`，推送内容直接进公开页面；**不需要**再去后台改参与方式（运行时自动建源才默认 `isolated`）。
+
+### 5.4 节流与熔断
+
+- `interval_minutes` 只是初值，每天 04:20 会被按近 7 天产出自动调整到 15–180 分钟，**不能用来做盘峰节流**。
+- 09:30 / 13:00 盘峰的节流点放在**反哺脚本**：控制推送频次与每批条数；或直接在后台暂停对应信源。
+- 模型侧用后台「付费请求上限」熔断；调界面时 `COLLECT_ENABLED=false`、`MODEL_CALLS_ENABLED=false`，飞书与 IndexNow 开关保持关闭。
+- `SELECTION.classes` 的 `finFlash 72` / `finCommentary 78` 需在后台给财经快讯、市场评论类信源逐源设置（seed 不写此字段）。
 
 ---
 
@@ -235,7 +281,7 @@ node scripts/smoke.ts --base http://localhost:3000               # 站点起来�
 |---|---|---|
 | 1a | `site/site.ts` 站点身份 + 09:30 | ✅ 已提交 `5c12b06` |
 | 1b | `industry/taxonomy.ts` 加 4 类 + 金融词表/主体词典；`section` 改两节；`prompts/` 五份联动（prefilter / structure / content-understanding / selection-score / rules-domain）；`selection.ts` 加类别；`topics.json` 金融主题组；`wording.ts` 金融禁用词 | ✅ 已完成：`typecheck` 0 错误，38 个 DB 测试全过 |
-| 2 | `sources.json` 免费套餐 + 反哺契约 + 盘峰节流说明；`site/public/` 已查证为运行时填充，无需改 | 进行中 |
+| 2 | `sources.json` 免费套餐 + 反哺契约 + 盘峰节流说明；`site/public/` 已查证为运行时填充，无需改 | ✅ 已完成：24 源通过框架配置白名单，`typecheck` 0 错误 |
 | 3 | `modules/board/`：`module.ts` / `server.ts`（board 接口）/ `web.tsx` / `ai.tsx` / `finance.tsx` / 清单注册 / Dockerfile | 待做 |
 | 4 | 品牌报头、changelog、SelectBench 校准、公众号导流 | 待做 |
 
@@ -271,7 +317,15 @@ node scripts/smoke.ts --base http://localhost:3000               # 站点起来�
 3. **`external` 源可在 seed 里预置并直接设为 `editorial`**：`scripts/seed.ts` 支持 `kind: "external"`，`config: {}` 能通过 `assertSupportedConfig`，`collect.ts` 不会主动抓它。文档所说「自动建源默认不进公开页面」是运行时自动建源的行为，预置源可显式给 `participation_mode: "editorial"`。
 4. **`publishedAtUtcOffset` 是 `rss` / `web_list` / `json_list` 的合法配置项**，但只对不带时区的日期生效，且固定偏移无法跟随美东夏令时。已验证 5 个海外金融 RSS 均自带时区，不设置更准确。
 
-### 12.4 仍待补的两项（不能代写）
+### 12.4 批次 2 落地记录
+
+- `industry/sources.json` 从 18 源扩到 **24 源**：保留全部 18 个示范 AI RSS；新增 5 个实测 200 可达的免费金融 RSS（美联储货币政策、SEC 新闻稿、CNBC Finance、CNBC Earnings、MarketWatch MarketPulse）；新增 1 个 `external` 反哺源（`external-fengze-daily`，`editorial` / `T1_5` / `config: {}`）。
+- **零付费依赖**：无 `x_search` / `mp_account` / Jina / Embedding；所有源 `site_fulltext` / `syndicate_fulltext` 均为 `false`。
+- 校验脚本：24 个源 id 唯一、`unsupportedConfig()` 全部为空、`owner_entity_id` 全部存在于 `ENTITIES`、`typecheck` 0 错误。统计 `rss:23 / external:1`，`T1:12 / T1_5:1 / T2:11`。
+- 反哺契约、A 股中文源实测结论、盘峰节流方案写入第 5 节；`site/public/` 已确认无需改动。
+- **未做** Docker 起站 + `smoke.ts`：需要 `.env`（`ADMIN_PASSWORD` / `SESSION_SECRET` / `IMG_PROXY_SIGN_SECRET` 等本地凭证），按约定不代填；留到部署环节由本人执行。
+
+### 12.5 仍待补的两项（不能代写）
 
 1. **变现路径**（立项三项缺一不可，目前只有「命中痛点：搞钱」与「目标用户」）；
 2. `site/pages/terms.md` / `privacy.md` 的正文（AGENTS.md 要求本人确认）。
