@@ -28,7 +28,7 @@ ls -l .env
 ./up
 ```
 
-`.env` 不存在时：`cp .env.example .env`，填上 `ADMIN_PASSWORD`、`SESSION_SECRET`、`IMG_PROXY_SIGN_SECRET`、`POSTGRES_PASSWORD`、`INGEST_TOKEN`、`LLM_API_KEY`，并把 `LLM_BASE_URL` / `LLM_MODEL` 指向可用模型（本机是 `http://new-api:3000/v1` + `deepseek-v4-pro-0813`）。`./up check` 会列出缺哪些键。
+`.env` 不存在时：`cp .env.example .env`，填上 `ADMIN_PASSWORD`、`SESSION_SECRET`、`IMG_PROXY_SIGN_SECRET`、`POSTGRES_PASSWORD`、`INGEST_TOKEN`、`LLM_API_KEY`，并把 `LLM_BASE_URL` / `LLM_MODEL` 指向可用模型（格式见 `.env.example`，本机地址不写进文档）。`./up check` 会列出缺哪些键。
 
 ---
 
@@ -39,12 +39,13 @@ ls -l .env
 | 看容器状态 + 健康检查 | `./up status` |
 | 看处理日志（Ctrl-C 退出） | `./up logs` |
 | 只巡检页面 / 接口 / RSS / MCP | `./up smoke` |
+| 看本机所有容器的端口台账（只读） | `./up ports` |
 | 改了 `site/`、`industry/`、`modules/`、`Dockerfile` 后重建 | `./up rebuild` |
 | 只改了 `.env`，让容器重新读 | `./up down && ./up` |
 | 列出所有命令 | `./up help` |
 
-`./up check` 会自动**只读**检查：Node ≥ 24、Docker 是否运行、compose 配置、`.env` 变量是否齐全、模型是否为固定模型、`rag-net` 网络、`new-api` 容器、3000 端口。
-启动时会**自动修**两件小事：`rag-net` 不存在就创建、`.env` 权限不是 600 就改回来。
+`./up check` 会自动**只读**检查：Node ≥ 24、Docker、compose 配置、`.env` 变量、固定模型、`PORT` 与 `SITE_URL` 是否一致、共享网络、LLM 网关、project 是否被别的目录占用、端口占用、其他 compose 是否也声明了本站端口。
+启动时会**自动修**两件小事：共享网络不存在就创建、`.env` 权限不是 600 就改回来。
 
 ---
 
@@ -52,13 +53,23 @@ ls -l .env
 
 | 页面 | 地址 |
 |---|---|
-| 首页 | `http://localhost:3000/` |
-| AI 板块 / 金融板块 | `http://localhost:3000/ai` · `http://localhost:3000/finance` |
-| 当日日报 | `http://localhost:3000/daily` |
-| 后台 | `http://localhost:3000/admin` |
+| 首页 | `http://localhost:3100/` |
+| AI 板块 / 金融板块 | `http://localhost:3100/ai` · `http://localhost:3100/finance` |
+| 当日日报 | `http://localhost:3100/daily` |
+| 后台 | `http://localhost:3100/admin` |
 | 机器出口 | `/feed.xml` · `/sitemap.xml` · `/llms.txt` · `/api/v1/items` · `/api/mcp` |
 
 每天 **09:15** 要闻自动化反哺入站 → 引擎筛选分类 → **09:30** 自动出日报，不用手动操作。
+
+---
+
+## 端口
+
+- 本站用 **3100**。`.env` 里 `PORT=3100` 与 `SITE_URL=http://localhost:3100` **必须一致**，`./up check` 会拦下不一致。
+- **换端口只改 `.env` 这两行**，然后 `./up down && ./up`。compose 默认值、代码、CI 都不用动（CI 没有 `.env`，仍走兜底 3000）。
+- `./up ports` 只读扫描 `~/github`、`~/Projects` 下所有 compose 的端口声明 + 运行中容器，列出谁占了哪个端口。不读 `.env` 值、不启动容器、不写文件。
+- ⚠️ **每天 09:15 的反哺自动化如果写死了 3000，换端口后要同步改推送地址**，否则次日起内容不再入站。
+- 起站日志出现 `volume ... already exists but was created for project "aihot"` 是**预期告警**：数据卷创建于旧 project，已显式保留卷名；数据完好，不用处理，也不要跑 `docker compose down -v`。
 
 ---
 
@@ -69,14 +80,16 @@ ls -l .env
 | 症状 | 一条命令 / 处理 |
 |---|---|
 | 站打不开、容器起不来 | `./up check` 看哪一行标 ✗，按提示修；再 `./up rebuild` |
+| 端口被占 / `PORT` 与 `SITE_URL` 不一致 | `./up ports` 看谁占了；改 `.env` 两行后 `./up down && ./up` |
+| `./up check` 报「旧 project 残留」或「同名 project」 | 按提示执行 `docker compose -p <旧名> down`，再 `./up` |
 | `/finance` 空页 | `docker compose exec -T db psql -U aihot -d aihot -c "select category,score from publications order by discovered_at desc limit 10;"` — 低于 40 分会被浏览门槛挡住，属正常 |
 | 日报没有条目 | `docker compose exec -T db psql -U aihot -d aihot -c "select count(*) from publications where selected;"` |
-| 反哺内容迟迟不进站 | `./up logs` 看 `content.extract-body`；`COLLECT_ENABLED` 必须是 `true` |
+| 反哺内容迟迟不进站 | `./up logs` 看 `content.extract-body`；`COLLECT_ENABLED` 必须是 `true`；确认 09:15 自动化的推送地址是 3100 |
 | 模型报 400 / `temperature` 不支持 | `.env` 的 `LLM_MODEL` 改成固定 `deepseek-v4-pro-0813`，别用 `free-auto`；改完 `./up down && ./up` |
-| 次日模型 401/403 | `LLM_API_KEY` 换成 `new-api` 的常驻 token（`workbuddy` / `finance-workbench`） |
+| 次日模型 401/403 | 换一个不过期、不限模型的常驻 token（见本机网关控制台） |
 | 巡检某一项 ✗ | `./up smoke` 单跑看具体路径；改了站点配置就 `./up rebuild` |
 
-> 更细的根因与修复方案见 `docs/deferred-items.md`；本机起站实测见 `docs/e2e-verification.md`。
+> 更细的根因与修复方案见 `docs/deferred-items.md`；本机起站实测见 `docs/e2e-verification.md`（3000 端口时期的记录）。
 
 ---
 
@@ -94,7 +107,7 @@ PATH=/usr/local/bin:$PATH npm run build -w @aihot/web
 
 ## 纪律（一句话）
 
-每完成一批单独 `git commit`；`git push` 前需本人确认并显式列出 deferred items；`.env`、密钥、`.workbuddy/` 一律不提交；定制只改 `site/`、`industry/`、`modules/`，不动 `apps/`、`packages/` 核心代码。
+每完成一批单独 `git commit`；`git push` 前需本人确认并显式列出 deferred items；`.env`、密钥、`.workbuddy/` 一律不提交（后者已写入 `.git/info/exclude`，仅本机生效）；定制只改 `site/`、`industry/`、`modules/`，不动 `apps/`、`packages/` 核心代码。
 
 ---
 
@@ -104,5 +117,5 @@ PATH=/usr/local/bin:$PATH npm run build -w @aihot/web
 |---|---|
 | `docs/deferred-items.md` | 5 项待办（条款正文、反哺免抓、板块 RSS、品牌素材、CI 全量测试）怎么收口 |
 | `docs/plan-ai-finance.md` | 定制方案、决策记录、全量测试归因 |
-| `docs/e2e-verification.md` | 本机 Docker 端到端实测日志 |
+| `docs/e2e-verification.md` | 本机 Docker 端到端实测日志（当时为 3000 端口） |
 | `docs/customize.md` | 引擎自带的定制说明 |

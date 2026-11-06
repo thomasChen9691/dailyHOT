@@ -499,8 +499,8 @@ node scripts/smoke.ts --base http://localhost:3000               # 站点起来�
 
 | 文档 | 职责 |
 |---|---|
-| `docs/sop.md` | **极简命令手册**：`./up` 一键自检 + 起站 + 巡检；`./up check` / `status` / `logs` / `down` / `rebuild` / `smoke`；故障一行对照、发布检查单 |
-| `up` / `scripts/fengze.mjs` | 一键脚本本体（零依赖 Node）：启动前自检、自动创建 `rag-net`、修 `.env` 权限、等 `/api/health`、跑 smoke |
+| `docs/sop.md` | **极简命令手册**：`./up` 一键自检 + 起站 + 巡检；`./up check` / `ports` / `status` / `logs` / `down` / `rebuild` / `smoke`；端口规则、故障一行对照、发布检查单 |
+| `up` / `scripts/fengze.mjs` | 一键脚本本体（零依赖 Node）：从 `.env` 派生端口、启动前自检（含端口一致性 / project 重名 / 跨项目端口声明）、自动创建 `rag-net`、修 `.env` 权限、等 `/api/health`、跑 smoke、`./up ports` 只读端口台账 |
 | `docs/deferred-items.md` | 5 项 deferred 的根因、方案对比、逐步命令、验收标准、需本人拍板的输入 |
 
 ### 14.1 5 项 deferred 的结论摘要
@@ -527,5 +527,5 @@ node scripts/smoke.ts --base http://localhost:3000               # 站点起来�
 ### 14.3 当前状态
 
 - 10 个本地 commit（`d2c883e` … `96f49f6`）**尚未 push**；`.workbuddy/` 保持未跟踪。
-- 站点本机可用：`http://localhost:3000`，4 容器健康，smoke 全过，日报 `daily|2026-11-06` 已落库。
+- 站点本机可用：`http://localhost:3000`（**当时端口；现已改 3100，见 `docs/sop.md`**），4 容器健康，smoke 全过，日报 `daily|2026-11-06` 已落库。
 - 本批只写文档，**不改任何代码**；上述 5 项仍为 deferred，按 `docs/deferred-items.md` 的 R0 → R3 顺序收口。
