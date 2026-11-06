@@ -16,6 +16,8 @@ const MACHINE: Array<[path: string, type: RegExp]> = [
   ["/api/v1/selected/snapshot", /json/],
   ["/feed.xml", /xml/],
   ["/feed/all.xml", /xml/],
+  ["/feed/ai.xml", /xml/],
+  ["/feed/finance.xml", /xml/],
   ["/llms.txt", /text\/plain/],
   ["/robots.txt", /text\/plain/],
   ["/sitemap.xml", /xml/],
