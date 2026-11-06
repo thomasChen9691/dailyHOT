@@ -402,7 +402,9 @@ node scripts/smoke.ts --base http://localhost:3000               # 站点起来�
 3. 浏览器逐项核对桌面侧栏、手机底栏、「我的」入口、分页与空态；`smoke.ts` 只保证 200 与站名，不覆盖视觉；
 4. 后台逐源给财经快讯 / 市场评论类信源设置 `finFlash` / `finCommentary` 类别；
 5. 批次 4：品牌报头 / favicon / changelog、SelectBench 门槛校准、盘峰节流落到反哺脚本；**二维码 / 公众号导流按「自用免费完全版」定位降级，暂不做**；
-6. ~~立项三项中「变现路径」~~ 已拍板（第 9 节）；**`terms.md` / `privacy.md` 正文仍需本人提供**。
+6. ~~立项三项中「变现路径」~~ 已拍板（第 9 节）；**`terms.md` / `privacy.md` 正文仍需本人提供**（收口步骤见 `docs/deferred-items.md` 第 1 项）。
+
+> 本节 1–6 项的最终归宿见第 14 节；其中第 1 项（Docker 起站）已于 2026-11-06 完成，实测证据见 `docs/e2e-verification.md`。
 
 ### 13.6 提交节奏
 
@@ -488,3 +490,41 @@ node scripts/smoke.ts --base http://localhost:3000               # 站点起来�
 两者都是 outline / 布局类 Playwright 测试，需要正常的无头浏览器与渲染环境；本机当前不具备。
 
 **结论**：环境性失败已全部归因清楚（启动超时 / 缺 `pg_dump` / 浏览器环境），**真实回归只有 `daily-report-alerts` 一处且已修**。全量 `test:web` 与全量 DB `npm test` 仍需在有 PostgreSQL 客户端与正常浏览器的环境（CI 或 Docker 镜像内）复跑，本机不再重复消耗时间。
+
+---
+
+## 14. 收口：SOP 与 deferred items 的归宿（2026-11-06）
+
+本批新增两份文档，把「怎么跑」与「还差什么、怎么补」从方案文档里拆出来，避免继续往本文堆附录：
+
+| 文档 | 职责 |
+|---|---|
+| `docs/sop.md` | 日常运行 SOP：环境前置、起停、09:15 → 09:30 内容链路、发布检查单、故障速查表、机器出口对照、提交纪律、CI 说明 |
+| `docs/deferred-items.md` | 5 项 deferred 的根因、方案对比、逐步命令、验收标准、需本人拍板的输入 |
+
+### 14.1 5 项 deferred 的结论摘要
+
+| # | 项 | 结论 |
+|---|---|---|
+| 1 | `terms.md` / `privacy.md` 正文 | 卡在**本人提供运营主体 / 联系方式并逐段确认**，非技术阻塞；`POLICY` 的 `license`/`headers`/`covers` 与 `SITE.contactEmail` 是可选联动位点 |
+| 2 | 反哺正文免抓 | **不存在「免抓配置」**：`jobs/content.ts:42` 的 `route()` 只看 `body_text` 是否为空。短期让反哺脚本补写 `body_text` + `body_status='ok'` 并重新入队（E2E 已验证），中期用模块级自定义反哺路由固化；不改 `packages/` |
+| 3 | 板块级合成 RSS | 在 `modules/board/server.ts` 的 `http(app)` 加 `/feed/ai.xml` / `/feed/finance.xml`，复用 `loadBoard()` 与 `escapeXml`/`siteUrl`，登记 `llms().ways`；`robots.txt` / sitemap 不用改 |
+| 4 | 批次 4 品牌素材 | 先改 `changelog.json`（事实）；图标**同名覆盖**零代码；报头字标必须重跑 `scripts/nameplates.ts` 并同步 `nameplates/index.json`；二维码 / 导流按「自用」定位不做 |
+| 5 | 全量 web/DB 测试 | **仓库已有 `.github/workflows/check.yml` 且装齐 `pg_dump` + Playwright**，无需新建 CI；但直接 push 会踩两个真实缺口（见 14.2） |
+
+### 14.2 审计发现：CI 的两个真实缺口
+
+复核 `check.yml` 与 `docker-compose.yml` 后确认，13.9 里「交给 CI 复跑」这句不能直接照做：
+
+| 缺口 | 依据 | 后果 | 处理 |
+|---|---|---|---|
+| `rag-net` external network | `docker-compose.yml` 底部 `networks: rag-net: external: true`（`96f49f6` 为本机 `new-api` 加入） | 干净 runner 无此网络，`docker` job 的 `docker compose up -d --build` 报 `network rag-net not found` | CI 加幂等一步 `docker network create rag-net 2>/dev/null \|\| true`；或把该网络移到本机专用、不提交的 override |
+| 漏跑 standalone 组 | `npm test` 只收 `tests/*.test.ts` 与 `modules/*/tests/*.test.ts`，不含 `*.standalone.test.ts`；workflow 无 `npm run test:standalone` | 13.9 里 244/244 的 standalone 测试（含板块页守护断言）在 CI 里根本没跑 | 在 `Typecheck` 后加 `Standalone tests` 步骤 |
+
+两项都在 `.github/`，改 CI 需本人确认（工程约定：重大动作先确认、push 前显式列 deferred items）。
+
+### 14.3 当前状态
+
+- 10 个本地 commit（`d2c883e` … `96f49f6`）**尚未 push**；`.workbuddy/` 保持未跟踪。
+- 站点本机可用：`http://localhost:3000`，4 容器健康，smoke 全过，日报 `daily|2026-11-06` 已落库。
+- 本批只写文档，**不改任何代码**；上述 5 项仍为 deferred，按 `docs/deferred-items.md` 的 R0 → R3 顺序收口。

@@ -52,7 +52,7 @@
 ### 三处发现（均非代码 bug，但值得后续修）
 
 1. **`COLLECT_ENABLED=false` 会连带关掉正文抽取 worker**：`registerExtractionJobs` 挂在 `registerSourceJobs` 下（`packages/backend/src/jobs/sources.ts:16`），`apps/worker/src/main.ts:23` 只在采集开启时注册它，反哺条目会卡在 `content.extract-body` 无人消费。
-2. **`external` 反哺只给 `raw.text` 时，引擎仍会去抓原始 URL 正文**：`body_text` 为空 → `route()` 选 extract；抓不到要等 **3 次 × 10 分钟**才降级到 analyze。**你现有的 09:15 HKT 反哺自动化会撞这个延迟**。建议后续让反哺脚本直接提供正文，或给 external 源加「不抓正文」配置。
+2. **`external` 反哺只给 `raw.text` 时，引擎仍会去抓原始 URL 正文**：`body_text` 为空 → `route()` 选 extract；抓不到要等 **3 次 × 10 分钟**才降级到 analyze。**你现有的 09:15 HKT 反哺自动化会撞这个延迟**。后续复核修正了本条的措辞：**并不存在「不抓正文」配置**——`packages/backend/src/jobs/content.ts:42` 的 `needsPage` 只由 `whole && pageFetchable && (wantsBody || bare)` 决定，`wantsBody` 只会被配置打开、不会被关闭，`bare` 就是 `body_text` 为空。因此「把正文写进 `body_text`」本身就是免抓方案。完整根因、三条可选路径与验收命令见 `docs/deferred-items.md` 第 2 项。
 3. **自动路由免费模型不兼容 AIHOT 固定参数**：`free-auto` 会落到 `kimi-k3`（拒绝 `temperature: 0.2`），必须选逐项兼容的固定模型（本次选 `deepseek-v4-pro-0813`）。
 
 ### 已知限制 / 起床后需要知道的
@@ -62,6 +62,8 @@
 - 6 条演示条目（`example.com` URL、模型改写过标题）**保留在库里**，可在后台删除；不影响运行。
 - `.env` 已生成且被 `.gitignore` 忽略，权限 600，**未提交，也未把任何密钥写进文档或聊天**。
 - 安全阀：飞书 / IndexNow 全关；`COLLECT_ENABLED=true`（为注册正文 worker 且让站点自动采集）、`MODEL_CALLS_ENABLED=true`（反哺内容需要）。全部只走 `new-api` 免费模型，无任何付费源。
+
+**后续怎么收口**：本次验证暴露的顺延项（`terms.md` / `privacy.md` 正文、反哺正文免抓、板块级合成 RSS、批次 4 品牌素材、全量 web/DB 测试）逐项方案见 `docs/deferred-items.md`；日常起停、巡检与故障速查见 `docs/sop.md`。特别提醒：`.github/workflows/check.yml` 已具备 `pg_dump` 与 Playwright，但 `docker-compose.yml` 的 `rag-net: external: true` 会让干净 runner 起站失败，且 CI 漏跑 `test:standalone`，push 前需先补这两处（方案文档第 5 项 / 方案主文档 14.2）。
 
 ### 运行与停止
 
