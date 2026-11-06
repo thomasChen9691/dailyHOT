@@ -1,7 +1,7 @@
-# Deferred items · 5 项顺延事项的收口方案
+# Deferred items · 6 项顺延事项的收口方案
 
 > 本文回答「怎么解决」，**不实施代码改动**。每项给出：代码依据 → 方案对比 → 推荐落地步骤 → 验收命令 → 风险。
-> 配套文档：`docs/sop.md`（极简命令手册，`./up` 一键启停）、`docs/plan-ai-finance.md`（方案与历史）、`docs/e2e-verification.md`（本机 Docker 实测）。
+> 配套文档：`docs/sop.md`（极简命令手册，`./up` 一键启停）、`docs/plan-ai-finance.md`（方案与历史）、`docs/e2e-verification.md`（本机 Docker 实测）、`docs/automation-fallback.md`（配额备用方案）。
 > 日常启停一律用 `./up` / `./up down`；启动前自检用 `./up check`，端口台账用 `./up ports`，本文命令只在收口具体事项时用。
 > 定位不变：**自用 / 免费完全版，不对外变现**，因此凡「导流 / 收费 / 合规对外」的动作一律降级。
 > **端口说明**：本文命令已按当前 **3100** 端口书写（`.env` 的 `PORT` / `SITE_URL`）。反哺一律走 `./up ingest`，地址随 `.env` 派生；端口再次变更时用 `./up help` / `./up ingest` 取当前地址。
@@ -17,12 +17,15 @@
 | 3 | 板块级合成 RSS | 在 `modules/board/server.ts` 的 `http(app)` 加 `/feed/ai.xml`、`/feed/finance.xml`，复用 `loadBoard()` + `escapeXml`/`siteUrl`，并登记 `llms().ways` | 否 | 否 |
 | 4 | 批次 4 品牌素材 | 先改 `changelog.json`（事实，无审美）；再同名覆盖图标；**报头字标必须重跑 `scripts/nameplates.ts`** 并同步 `index.json` | 否 | **是**（视觉确认） |
 | 5 | 全量 web/DB 测试 | **仓库已有 CI 且已装齐 `pg_dump` + Playwright**；先补 2 个真实缺口（`rag-net` external network、缺 `test:standalone` 步骤），再 push 触发 `Check` | 否（改 `.github/`） | **是**（是否改 CI、是否 push） |
+| 6 | 平台工作流配额受限的备用方案 | **方案已成文**（`docs/automation-fallback.md`）：主链路本就不依赖平台自动化；按 R0–R3 阶梯，限制落地时再做名额瘦身 / 本机 launchd | 否 | 否（R0 零改动即可）；实施 R2/R3 才需点头 |
 
 **最关键的三个发现**（下面逐项展开）：
 
 1. 第 2 项**不需要「配置」也不需改核心**：`route()` 判定只看 `body_text` 是否为空，正文写进去就自然免抓；「免抓配置」这个说法本身是误导。
 2. 第 5 项**不需要新建 CI**：`.github/workflows/check.yml` 已经装了 `postgresql-client-17` 和 `chromium webkit`；但直接 push 会因 `docker-compose.yml` 的 `rag-net: external: true` 在干净 runner 上不存在而失败，且 CI 漏跑 244 个 standalone 测试。
 3. 第 1、4、5 项都卡在**本人输入 / 授权**，不是技术问题；第 2、3 项可以无人值守直接做完。
+
+> 第 6 项与前五项性质不同：它是**风险预案**，不是待修缺陷。R0（零改动）现在就已生效，只有平台真的限额时才需要动手。
 
 ---
 
@@ -34,6 +37,7 @@
 | 条款全文逐段确认 | `terms.md` / `privacy.md` 落盘 | 保持上游模板不动，站点继续显示「请填写」 |
 | 品牌视觉偏好（字标 / 配色 / 是否用 AI 生成图） | `site/brand/` 覆盖 | 只做 `changelog.json`，图标保持上游默认 |
 | 是否允许改 `.github/workflows/check.yml`、是否允许 `git push` | 触发 CI | 本机只跑 standalone + DB 组，web 组结论维持「环境受限」 |
+| 是否提前实施第 6 项的 R2/R3（本机定时 + 采集脚本） | 平台配额受限时的自动兜底 | 维持 R0：靠站内 cron 与 `./up`，不加任何新调度 |
 
 ---
 
@@ -280,6 +284,40 @@ PATH=/usr/local/bin:$PATH npm test
 
 ---
 
+## 6. 平台工作流数量受限的备用方案
+
+> 完整方案见 **`docs/automation-fallback.md`**（链路分层、三种限制形态、方案对比、R0–R3 阶梯、launchd 模板与验收清单）。本节只留结论与触发条件。
+
+### 现状（代码依据）
+
+- 定时与出刊**不占平台名额**：`apps/worker/src/schedules.ts` 用 pg-boss 注册十余条容器内 cron，其中 `reports.compose`（`0,30 * * * *`）按 `site/site.ts` 的 `EDITION_TIMES.daily = "09:30"` 判期出刊；`sources.schedule` 每分钟调度到期信源。
+- 内容来源自足：`industry/sources.json` 的 **23 个 RSS 源全部启用**（另有 1 个 `external` 补充源），不反哺也能出内容。
+- 模型调用在 worker 内完成，不依赖平台内置模型。
+- 反哺入口已是端口无关：`./up ingest` 从 `.env` 的 `SITE_URL` 派生地址。
+- CI 侧只有 1 个 workflow，触发方式为 push / PR / 手动，**没有 `schedule:`**，不占定时配额。
+
+### 结论与阶梯
+
+| 阶段 | 触发条件 | 动作 | 验收 |
+|---|---|---|---|
+| **R0（当前）** | 无限制 | **零改动**：站内 cron + 23 个 RSS 自采 + 09:30 出刊；`./up` 人工兜底 | `./up check` 全绿、`./up smoke` 全过、`./up status` 4 容器 Up |
+| R1 | 限额 ≤5 条 | 清理过期一次性 / 长期暂停任务，同时间窗合并 | 活跃任务数达标，站点数据条数不下降 |
+| R2 | 限额 1–2 条 | 只留 1 条总控负责站外写作，周期动作下沉站内 cron | CSV 仍生成且 `./up ingest` 能入站 |
+| R3 | 平台 0 条 | 本机 launchd 一条 plist → `./up`（幂等）；plist 不入库 | 连续 2 天日报自动落库，数据卷不变 |
+
+### 不采用
+
+- **CI 定时任务**：runner 无法反哺只监听本机 loopback 的接口，且会把抓取逻辑暴露在公开仓库。
+- **为省名额改站内 cron**：它们本就不计入平台配额，改了只会引入回归。
+
+### 风险
+
+- 唯一真实损失是**站外撰写 / 配图 / 推送**，不属于本站职责；按「自用」定位降级为手动导出即可。
+- launchd 的绝对路径写错会**静默不跑**，实施时必须由安装脚本替换占位符并实测一次；模板见方案文档 6.2。
+- 切换调度层时**禁止 `down -v`**，数据卷卷名显式保留。
+
+---
+
 ## 建议执行顺序与总验收
 
 | 轮次 | 动作 | 完成判据 |
@@ -289,4 +327,5 @@ PATH=/usr/local/bin:$PATH npm test
 | **R2（需本人）** | 收齐 4 类输入 → 条款正文、品牌素材、CI 补丁 | 条款无占位符且本人已确认；图标与报头目测通过；CI 四个 job 全绿 |
 | **R3（需本人）** | `git push` 触发 CI，回填 3 份文档 | Actions 全绿；`docs/plan-ai-finance.md` 13.9 更新为 CI 结论 |
 
-> 每一轮按 `docs/sop.md` 第 4 节走发布检查单，并**单独 commit**；`.workbuddy/` 与 `.env` 不纳入提交。
+> 每一轮按 `docs/sop.md` 的检查单走，并**单独 commit**；`.workbuddy/` 与 `.env` 不纳入提交。
+> 第 6 项不进入上表轮次：R0 已完成（零改动），R1–R3 只在平台配额真正受限时按 `docs/automation-fallback.md` 触发。

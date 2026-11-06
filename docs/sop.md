@@ -69,7 +69,7 @@ ls -l .env
 - 本站用 **3100**。`.env` 里 `PORT=3100` 与 `SITE_URL=http://localhost:3100` **必须一致**，`./up check` 会拦下不一致。
 - **换端口只改 `.env` 这两行**，然后 `./up down && ./up`。compose 默认值、代码、CI 都不用动（CI 没有 `.env`，仍走兜底 3000）。
 - `./up ports` 只读扫描 `~/github`、`~/Projects` 下所有 compose 的端口声明 + 运行中容器，列出谁占了哪个端口。不读 `.env` 值、不启动容器、不写文件。
-- ✅ 反哺地址**不再写死端口**：`./up ingest` 从 `.env` 的 `SITE_URL` 派生，当前即 3100。09:15 自动化调用它即可，以后换端口不用改自动化；若必须自己拼 URL，`./up ingest` 不带参数会打印当前地址。
+- ✅ 反哺地址**不再写死端口**：`./up ingest` 从 `.env` 的 `SITE_URL` 派生，当前即 3100。外部要闻脚本调用它即可，以后换端口不用改脚本；若必须自己拼 URL，`./up ingest` 不带参数会打印当前地址。
 - 起站日志出现 `volume ... already exists but was created for project "aihot"` 是**预期告警**：数据卷创建于旧 project，已显式保留卷名；数据完好，不用处理，也不要跑 `docker compose down -v`。
 
 ---
@@ -84,9 +84,9 @@ ls -l .env
 ./up ingest output/daily_ai_finance_<日期>.csv            # 真正入站
 ```
 
-- CSV 用 09:15 要闻的固定列 `section,category,content,reason,link`；也支持 JSON `{sourceId,sourceName,items[]}` 和 stdin `-`。
+- CSV 用要闻固定列 `section,category,content,reason,link`；也支持 JSON `{sourceId,sourceName,items[]}` 和 stdin `-`。
 - `INGEST_TOKEN` 从 `.env` 读、脚本不打印；自动复用 `external-fengze-daily` 源。
-- **09:15 自动化调用 `./up ingest <当日 CSV>` 即可**，改端口不用改自动化；必须硬编码 URL 时用 `./up ingest` 打印的地址。
+- **外部要闻脚本调用 `./up ingest <当日 CSV>` 即可**，改端口不用改脚本；必须硬编码 URL 时用 `./up ingest` 打印的地址。**反哺是可选增强，不反哺站点也能靠内置信源出刊。**
 - ⚠️ 引擎仍会尝试抓原始链接正文，抓不到会延迟处理（收口方案见 `docs/deferred-items.md` 第 2 项）。
 
 ---
@@ -133,7 +133,8 @@ PATH=/usr/local/bin:$PATH npm run build -w @aihot/web
 
 | 文档 | 内容 |
 |---|---|
-| `docs/deferred-items.md` | 5 项待办（条款正文、反哺免抓、板块 RSS、品牌素材、CI 全量测试）怎么收口 |
+| `docs/deferred-items.md` | 6 项待办（条款正文、反哺免抓、板块 RSS、品牌素材、CI 全量测试、配额备用方案）怎么收口 |
 | `docs/plan-ai-finance.md` | 定制方案、决策记录、全量测试归因 |
 | `docs/e2e-verification.md` | 本机 Docker 端到端实测日志（当时为 3000 端口） |
+| `docs/automation-fallback.md` | 平台工作流数量受限时的备用方案（分层、R0–R3、本机调度模板） |
 | `docs/customize.md` | 引擎自带的定制说明 |
