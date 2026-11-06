@@ -4,7 +4,7 @@
 > 配套文档：`docs/sop.md`（极简命令手册，`./up` 一键启停）、`docs/plan-ai-finance.md`（方案与历史）、`docs/e2e-verification.md`（本机 Docker 实测）。
 > 日常启停一律用 `./up` / `./up down`；启动前自检用 `./up check`，端口台账用 `./up ports`，本文命令只在收口具体事项时用。
 > 定位不变：**自用 / 免费完全版，不对外变现**，因此凡「导流 / 收费 / 合规对外」的动作一律降级。
-> **端口说明**：本文的可复制命令写于站点使用 3000 端口的时期，现已改为 **3100**（`.env` 的 `PORT` / `SITE_URL`）。执行时把示例里的 `localhost:3000` 换成 `localhost:3100`，或直接 `./up smoke` / `./up help` 取当前地址。
+> **端口说明**：本文命令已按当前 **3100** 端口书写（`.env` 的 `PORT` / `SITE_URL`）。反哺一律走 `./up ingest`，地址随 `.env` 派生；端口再次变更时用 `./up help` / `./up ingest` 取当前地址。
 
 ---
 
@@ -66,8 +66,8 @@
 4. 验收：
 
 ```bash
-PATH=/usr/local/bin:$PATH node scripts/smoke.ts --base http://localhost:3000   # /terms、/privacy 200 且含站名
-curl -fsS http://localhost:3000/llms.txt | grep -E "terms|privacy|使用规则|隐私"
+PATH=/usr/local/bin:$PATH node scripts/smoke.ts --base http://localhost:3100   # /terms、/privacy 200 且含站名
+curl -fsS http://localhost:3100/llms.txt | grep -E "terms|privacy|使用规则|隐私"
 grep -rn "请填写\|请写明" site/pages/                       # 应无输出
 ```
 
@@ -80,6 +80,8 @@ grep -rn "请填写\|请写明" site/pages/                       # 应无输出
 ---
 
 ## 2. 反哺正文免抓配置（优先级最高，影响 09:15 自动化时效）
+
+> **2026-11-06 复核**：仓库内与本机常用脚本目录中，**没有发现任何写死 `localhost:3000/api/ingest/items` 的反哺配置**；「09:15 自动化反哺入站」此前是方案设想，尚未实际接线。因此端口换到 3100 **不会造成断供**，但当前反哺需手动 `./up ingest <当日 CSV>`。后续接线一律调用 `./up ingest`：目标由 `.env` 的 `SITE_URL` 派生，改端口无需改自动化。
 
 ### 现状与精确根因
 
@@ -170,10 +172,10 @@ docker compose logs --tail 100 worker | grep -i "extract\|llm HTTP"   # 期望�
 ### 验收
 
 ```bash
-curl -fsSI http://localhost:3000/feed/ai.xml | grep -Ei "HTTP/|content-type|etag|cache-control"
-curl -fsS http://localhost:3000/feed/ai.xml | xmllint --noout -      # 若无 xmllint，用 node 解析
-curl -fsS http://localhost:3000/llms.txt | grep -E "feed/(ai|finance)\.xml"
-PATH=/usr/local/bin:$PATH node scripts/smoke.ts --base http://localhost:3000
+curl -fsSI http://localhost:3100/feed/ai.xml | grep -Ei "HTTP/|content-type|etag|cache-control"
+curl -fsS http://localhost:3100/feed/ai.xml | xmllint --noout -      # 若无 xmllint，用 node 解析
+curl -fsS http://localhost:3100/llms.txt | grep -E "feed/(ai|finance)\.xml"
+PATH=/usr/local/bin:$PATH node scripts/smoke.ts --base http://localhost:3100
 ```
 
 ### 风险
@@ -202,8 +204,8 @@ PATH=/usr/local/bin:$PATH node scripts/smoke.ts --base http://localhost:3000
 ### 验收
 
 ```bash
-PATH=/usr/local/bin:$PATH node scripts/smoke.ts --base http://localhost:3000   # /og/site.png、/icon.png、/favicon.ico 已在清单
-curl -fsS http://localhost:3000/daily | grep -o "枫泽观潮" | head -3
+PATH=/usr/local/bin:$PATH node scripts/smoke.ts --base http://localhost:3100   # /og/site.png、/icon.png、/favicon.ico 已在清单
+curl -fsS http://localhost:3100/daily | grep -o "枫泽观潮" | head -3
 git status --short site/brand site/changelog.json                              # 确认只改这几处
 ```
 

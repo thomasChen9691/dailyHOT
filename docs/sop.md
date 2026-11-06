@@ -39,6 +39,7 @@ ls -l .env
 | 看容器状态 + 健康检查 | `./up status` |
 | 看处理日志（Ctrl-C 退出） | `./up logs` |
 | 只巡检页面 / 接口 / RSS / MCP | `./up smoke` |
+| 要闻反哺入站 / 看当前推送地址 | `./up ingest` |
 | 看本机所有容器的端口台账（只读） | `./up ports` |
 | 改了 `site/`、`industry/`、`modules/`、`Dockerfile` 后重建 | `./up rebuild` |
 | 只改了 `.env`，让容器重新读 | `./up down && ./up` |
@@ -59,7 +60,7 @@ ls -l .env
 | 后台 | `http://localhost:3100/admin` |
 | 机器出口 | `/feed.xml` · `/sitemap.xml` · `/llms.txt` · `/api/v1/items` · `/api/mcp` |
 
-每天 **09:15** 要闻自动化反哺入站 → 引擎筛选分类 → **09:30** 自动出日报，不用手动操作。
+引擎筛选分类后 **09:30** 自动出日报。要闻反哺走 `./up ingest`（地址随 `.env` 自动变），当前目标 `http://localhost:3100/api/ingest/items`。
 
 ---
 
@@ -68,8 +69,25 @@ ls -l .env
 - 本站用 **3100**。`.env` 里 `PORT=3100` 与 `SITE_URL=http://localhost:3100` **必须一致**，`./up check` 会拦下不一致。
 - **换端口只改 `.env` 这两行**，然后 `./up down && ./up`。compose 默认值、代码、CI 都不用动（CI 没有 `.env`，仍走兜底 3000）。
 - `./up ports` 只读扫描 `~/github`、`~/Projects` 下所有 compose 的端口声明 + 运行中容器，列出谁占了哪个端口。不读 `.env` 值、不启动容器、不写文件。
-- ⚠️ **每天 09:15 的反哺自动化如果写死了 3000，换端口后要同步改推送地址**，否则次日起内容不再入站。
+- ✅ 反哺地址**不再写死端口**：`./up ingest` 从 `.env` 的 `SITE_URL` 派生，当前即 3100。09:15 自动化调用它即可，以后换端口不用改自动化；若必须自己拼 URL，`./up ingest` 不带参数会打印当前地址。
 - 起站日志出现 `volume ... already exists but was created for project "aihot"` 是**预期告警**：数据卷创建于旧 project，已显式保留卷名；数据完好，不用处理，也不要跑 `docker compose down -v`。
+
+---
+
+## 反哺入站（要闻 → 站点）
+
+当前地址：**`http://localhost:3100/api/ingest/items`**，由 `.env` 的 `SITE_URL` 派生。
+
+```bash
+./up ingest                                              # 打印当前地址 + 用法
+./up ingest --dry-run output/daily_ai_finance_<日期>.csv  # 只解析，不发送
+./up ingest output/daily_ai_finance_<日期>.csv            # 真正入站
+```
+
+- CSV 用 09:15 要闻的固定列 `section,category,content,reason,link`；也支持 JSON `{sourceId,sourceName,items[]}` 和 stdin `-`。
+- `INGEST_TOKEN` 从 `.env` 读、脚本不打印；自动复用 `external-fengze-daily` 源。
+- **09:15 自动化调用 `./up ingest <当日 CSV>` 即可**，改端口不用改自动化；必须硬编码 URL 时用 `./up ingest` 打印的地址。
+- ⚠️ 引擎仍会尝试抓原始链接正文，抓不到会延迟处理（收口方案见 `docs/deferred-items.md` 第 2 项）。
 
 ---
 
@@ -84,7 +102,7 @@ ls -l .env
 | `./up check` 报「旧 project 残留」或「同名 project」 | 按提示执行 `docker compose -p <旧名> down`，再 `./up` |
 | `/finance` 空页 | `docker compose exec -T db psql -U aihot -d aihot -c "select category,score from publications order by discovered_at desc limit 10;"` — 低于 40 分会被浏览门槛挡住，属正常 |
 | 日报没有条目 | `docker compose exec -T db psql -U aihot -d aihot -c "select count(*) from publications where selected;"` |
-| 反哺内容迟迟不进站 | `./up logs` 看 `content.extract-body`；`COLLECT_ENABLED` 必须是 `true`；确认 09:15 自动化的推送地址是 3100 |
+| 反哺内容迟迟不进站 | `./up ingest` 看当前地址（应为 3100）；`./up ingest --dry-run <csv>` 验证解析；`./up logs` 看 `content.extract-body`；`COLLECT_ENABLED` 必须是 `true` |
 | 模型报 400 / `temperature` 不支持 | `.env` 的 `LLM_MODEL` 改成固定 `deepseek-v4-pro-0813`，别用 `free-auto`；改完 `./up down && ./up` |
 | 次日模型 401/403 | 换一个不过期、不限模型的常驻 token（见本机网关控制台） |
 | 巡检某一项 ✗ | `./up smoke` 单跑看具体路径；改了站点配置就 `./up rebuild` |

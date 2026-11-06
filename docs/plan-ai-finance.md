@@ -123,7 +123,7 @@
 | AI | 18 个示范 RSS（OpenAI / DeepMind / Google Research / Hugging Face / Microsoft Research / NVIDIA / AWS ML / GitHub AI / Mistral / BAIR / The Verge AI / TechCrunch AI / Ars Technica / MIT Tech Review / The Decoder / Simon Willison / Import AI / Latent Space） | T1 官方 + T2 媒体个人 | 全部保留，可在后台精简到约 12 个 |
 | 金融 · 官方一手 | `federalreserve.gov/feeds/press_monetary.xml`、`sec.gov/news/pressreleases.rss` | T1 | 已实测 200 可达；`owner_entity_id` = `fed` / `sec`，与 `PUBLISHER_DOMAINS` 一致 |
 | 金融 · 媒体 | CNBC Finance (`10000664`)、CNBC Earnings (`15839135`)、MarketWatch MarketPulse | T2 | 已实测 200 可达、各 30 条；刻意避开综合 Top News，减少非金融噪声 |
-| A 股 / 中文财经 | `external-fengze-daily`（`kind: external`，`participation_mode: editorial`，`tier: T1_5`，`config: {}`） | T1_5 | 由 09:15 自动化反哺供稿，框架不主动抓取 |
+| A 股 / 中文财经 | `external-fengze-daily`（`kind: external`，`participation_mode: editorial`，`tier: T1_5`，`config: {}`） | T1_5 | 由 `./up ingest` 反哺供稿（09:15 自动化尚未接线，见 `docs/deferred-items.md` 第 2 项），框架不主动抓取 |
 
 ### 5.2 为什么 A 股中文源没有直接预置
 
@@ -189,7 +189,7 @@ Content-Type: application/json
 npm run typecheck
 DATABASE_URL=postgres://127.0.0.1:5432/dailyhot_test npm test   # 库名须 _test/_ci，账号需 CREATEDB
 npm run build -w @aihot/web && npm run test:web
-node scripts/smoke.ts --base http://localhost:3000               # 站点起来后
+node scripts/smoke.ts --base http://localhost:3100               # 站点起来后
 ```
 
 - `scripts/smoke.ts` 的 `PAGES` 已加入 `/ai` / `/finance`，`MACHINE` 已加入 `/api/board/ai` / `/api/board/finance`，部署后 smoke 会覆盖两个板块页与接口（见 13.3）。
@@ -228,7 +228,7 @@ node scripts/smoke.ts --base http://localhost:3000               # 站点起来�
 | 页面形态 | **A 独立页** `/ai` + `/finance` | 新建模块 `modules/board/`，走 `ModuleDeclaration.pages` + `WebModule.sidebar/tools`；不动 `apps/`、`packages/`；首页保留融合精选，日报按 `section` 分两节 |
 | 站名 | **枫泽观潮** | `SITE.name` / `organization.name` = 枫泽观潮；`mcpPrefix: fengze`（上线后不改）；`crawlerName: FengzeBot/1.0`；`footerNote` 去掉 AIHOT；`subject` 建议 `AI 与财经`；`interfaceVersion` 保持 `4.0.0` |
 | 信源与口味 | **标准双板块套餐** | AI 约 12 个免费 RSS；A 股 6 类免费源（新华社/交易所/央行/东财/腾讯财经/天天基金）；美股 SEC EDGAR + 公司 IR + 美联储 + CNBC/MarketWatch RSS；重要/噪声例子见第 5 节表格，写进 `selection-score.md` 与 `prefilter.md` |
-| 与自动化关系 + 出刊 | **反哺 + 09:30** | `EDITION_TIMES.daily: "09:30"`（整点/半点合法，承接 09:15 HKT 推送）；weekly `10:00`、monthly `10:30` 不变；现有自动化经 `POST /api/ingest/items`（`kind: external` + `INGEST_TOKEN`）反哺入站；CSV 留痕不动；网站不重复抓取 |
+| 与自动化关系 + 出刊 | **反哺 + 09:30** | `EDITION_TIMES.daily: "09:30"`（整点/半点合法，承接 09:15 HKT 推送）；weekly `10:00`、monthly `10:30` 不变；反哺统一走 `./up ingest`（目标由 `.env` 的 `SITE_URL` 派生，现为 `http://localhost:3100/api/ingest/items`，`kind: external` + `INGEST_TOKEN`）；CSV 留痕不动；网站不重复抓取 |
 
 **因目标用户新增「美股观察」而追加的约束**：
 
@@ -397,7 +397,7 @@ node scripts/smoke.ts --base http://localhost:3000               # 站点起来�
 
 ### 13.5 本批未做 / 顺延项
 
-1. Docker 起站 + `node scripts/smoke.ts --base http://localhost:3000`：需要本人本地 `.env`（`ADMIN_PASSWORD` / `SESSION_SECRET` / `IMG_PROXY_SIGN_SECRET` / `INGEST_TOKEN`），按约定不代填；
+1. Docker 起站 + `node scripts/smoke.ts --base http://localhost:3100`：需要本人本地 `.env`（`ADMIN_PASSWORD` / `SESSION_SECRET` / `IMG_PROXY_SIGN_SECRET` / `INGEST_TOKEN`），按约定不代填；
 2. 全量 `test:web` / 全量 DB `npm test` 仍需在有 **PostgreSQL 客户端（`pg_dump`）** 与正常 Playwright 浏览器的环境（CI 或 Docker 镜像内）复跑；本机已确认缺 `pg_dump`、浏览器组会挂起，结论见 13.9；
 3. 浏览器逐项核对桌面侧栏、手机底栏、「我的」入口、分页与空态；`smoke.ts` 只保证 200 与站名，不覆盖视觉；
 4. 后台逐源给财经快讯 / 市场评论类信源设置 `finFlash` / `finCommentary` 类别；
@@ -500,7 +500,7 @@ node scripts/smoke.ts --base http://localhost:3000               # 站点起来�
 | 文档 | 职责 |
 |---|---|
 | `docs/sop.md` | **极简命令手册**：`./up` 一键自检 + 起站 + 巡检；`./up check` / `ports` / `status` / `logs` / `down` / `rebuild` / `smoke`；端口规则、故障一行对照、发布检查单 |
-| `up` / `scripts/fengze.mjs` | 一键脚本本体（零依赖 Node）：从 `.env` 派生端口、启动前自检（含端口一致性 / project 重名 / 跨项目端口声明）、自动创建 `rag-net`、修 `.env` 权限、等 `/api/health`、跑 smoke、`./up ports` 只读端口台账 |
+| `up` / `scripts/fengze.mjs` | 一键脚本本体（零依赖 Node）：从 `.env` 派生端口、启动前自检（含端口一致性 / project 重名 / 跨项目端口声明）、自动创建 `rag-net`、修 `.env` 权限、等 `/api/health`、跑 smoke、`./up ports` 只读端口台账、`./up ingest` 反哺入站（目标由 `SITE_URL` 派生，当前 3100，不在自动化里写死端口） |
 | `docs/deferred-items.md` | 5 项 deferred 的根因、方案对比、逐步命令、验收标准、需本人拍板的输入 |
 
 ### 14.1 5 项 deferred 的结论摘要
