@@ -452,21 +452,191 @@
     },
     {
       "id": "rss-marketwatch-pulse",
-      "name": "MarketWatch · MarketPulse",
+      "name": "MarketWatch · Top Stories",
       "kind": "rss",
       "config": {
-        "feedUrl": "https://feeds.content.dowjones.io/public/rss/mw_marketpulse",
+        "feedUrl": "https://feeds.content.dowjones.io/public/rss/mw_topstories",
         "_aihot": {
-          "initialBackfillLimit": 8
+          "initialBackfillLimit": 6
         }
       },
       "tier": "T2",
       "owner_entity_id": null,
       "participation_mode": "editorial",
-      "interval_minutes": 60,
+      "interval_minutes": 120,
       "tags": [
         "媒体",
         "美股"
+      ],
+      "site_fulltext": false,
+      "syndicate_fulltext": false
+    },
+    {
+      "id": "rss-chinanews-finance",
+      "name": "中新网 · 财经",
+      "kind": "rss",
+      "config": {
+        "feedUrl": "https://www.chinanews.com.cn/rss/finance.xml",
+        "_aihot": {
+          "initialBackfillLimit": 6
+        }
+      },
+      "tier": "T2",
+      "owner_entity_id": null,
+      "participation_mode": "editorial",
+      "interval_minutes": 120,
+      "tags": [
+        "媒体",
+        "A 股"
+      ],
+      "site_fulltext": false,
+      "syndicate_fulltext": false
+    },
+    {
+      "id": "rss-cnbc-top-news",
+      "name": "CNBC · Top News",
+      "kind": "rss",
+      "config": {
+        "feedUrl": "https://www.cnbc.com/id/100003114/device/rss/rss.html",
+        "_aihot": {
+          "initialBackfillLimit": 6
+        }
+      },
+      "tier": "T2",
+      "owner_entity_id": null,
+      "participation_mode": "editorial",
+      "interval_minutes": 120,
+      "tags": [
+        "媒体",
+        "美股"
+      ],
+      "site_fulltext": false,
+      "syndicate_fulltext": false
+    },
+    {
+      "id": "rss-cnbc-economy",
+      "name": "CNBC · Economy",
+      "kind": "rss",
+      "config": {
+        "feedUrl": "https://www.cnbc.com/id/20910258/device/rss/rss.html",
+        "_aihot": {
+          "initialBackfillLimit": 6
+        }
+      },
+      "tier": "T2",
+      "owner_entity_id": null,
+      "participation_mode": "editorial",
+      "interval_minutes": 120,
+      "tags": [
+        "媒体",
+        "宏观"
+      ],
+      "site_fulltext": false,
+      "syndicate_fulltext": false
+    },
+    {
+      "id": "rss-marketwatch-bulletins",
+      "name": "MarketWatch · Breaking News",
+      "kind": "rss",
+      "config": {
+        "feedUrl": "https://feeds.content.dowjones.io/public/rss/mw_bulletins",
+        "_aihot": {
+          "initialBackfillLimit": 6
+        }
+      },
+      "tier": "T2",
+      "owner_entity_id": null,
+      "participation_mode": "editorial",
+      "interval_minutes": 120,
+      "tags": [
+        "媒体",
+        "美股"
+      ],
+      "site_fulltext": false,
+      "syndicate_fulltext": false
+    },
+    {
+      "id": "rss-yahoo-finance",
+      "name": "Yahoo Finance · 指数与权重股",
+      "kind": "rss",
+      "config": {
+        "feedUrl": "https://feeds.finance.yahoo.com/rss/2.0/headline?s=%5EGSPC,%5EIXIC,NVDA,AAPL,MSFT&region=US&lang=en-US",
+        "_aihot": {
+          "initialBackfillLimit": 6
+        }
+      },
+      "tier": "T2",
+      "owner_entity_id": null,
+      "participation_mode": "editorial",
+      "interval_minutes": 120,
+      "tags": [
+        "媒体",
+        "美股"
+      ],
+      "site_fulltext": false,
+      "syndicate_fulltext": false
+    },
+    {
+      "id": "rss-fed-all",
+      "name": "美联储 · 全部新闻稿",
+      "kind": "rss",
+      "config": {
+        "feedUrl": "https://www.federalreserve.gov/feeds/press_all.xml",
+        "_aihot": {
+          "initialBackfillLimit": 6
+        }
+      },
+      "tier": "T1",
+      "owner_entity_id": "fed",
+      "participation_mode": "editorial",
+      "interval_minutes": 180,
+      "tags": [
+        "官方",
+        "美联储"
+      ],
+      "site_fulltext": false,
+      "syndicate_fulltext": false
+    },
+    {
+      "id": "rss-sec-edgar-8k",
+      "name": "SEC EDGAR · 8-K 当期披露",
+      "kind": "rss",
+      "config": {
+        "feedUrl": "https://www.sec.gov/cgi-bin/browse-edgar?action=getcurrent&type=8-K&count=40&output=atom",
+        "_aihot": {
+          "initialBackfillLimit": 6
+        }
+      },
+      "tier": "T1",
+      "owner_entity_id": "sec",
+      "participation_mode": "editorial",
+      "interval_minutes": 180,
+      "tags": [
+        "官方",
+        "监管",
+        "财报"
+      ],
+      "site_fulltext": false,
+      "syndicate_fulltext": false
+    },
+    {
+      "id": "rss-investing-news",
+      "name": "Investing.com · 市场快讯",
+      "kind": "rss",
+      "config": {
+        "feedUrl": "https://www.investing.com/rss/news.rss",
+        "publishedAtUtcOffset": "+00:00",
+        "_aihot": {
+          "initialBackfillLimit": 6
+        }
+      },
+      "tier": "T2",
+      "owner_entity_id": null,
+      "participation_mode": "editorial",
+      "interval_minutes": 120,
+      "tags": [
+        "媒体",
+        "全球市场"
       ],
       "site_fulltext": false,
       "syndicate_fulltext": false

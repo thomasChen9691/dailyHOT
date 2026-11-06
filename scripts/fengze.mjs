@@ -191,7 +191,7 @@ function check() {
       if (missing.length) add("bad", "必需配置", `缺 ${missing.join(", ")}`, "在 .env 里补齐这些键");
       else add("ok", "必需配置", `${REQUIRED.length}/${REQUIRED.length} 已填`);
 
-      if (env.LLM_MODEL === "free-auto") add("bad", "模型", "free-auto 会触发 400", "改成 deepseek-v4-pro-0813");
+      if (env.LLM_MODEL === "free-auto") add("bad", "模型", "free-auto 会触发 400", "改成固定模型，如 qwen3.8-27b");
       else if (env.LLM_MODEL) add("ok", "模型", "固定模型");
       if (env.COLLECT_ENABLED === "false") add("warn", "采集", "关闭会连带停正文 worker", "跑内容链路时设为 true");
       if (env.MODEL_CALLS_ENABLED === "false") add("warn", "模型调用", "关闭，反哺内容不会分析", "跑内容链路时设为 true");
