@@ -125,7 +125,7 @@
 | 金融 · 媒体 | CNBC Finance (`10000664`)、CNBC Earnings (`15839135`)、MarketWatch MarketPulse | T2 | 已实测 200 可达、各 30 条；刻意避开综合 Top News，减少非金融噪声 |
 | A 股 / 中文财经 | `external-fengze-daily`（`kind: external`，`participation_mode: editorial`，`tier: T1_5`，`config: {}`） | T1_5 | 由 `./up ingest` 反哺供稿（09:15 自动化尚未接线，见 `docs/deferred-items.md` 第 2 项），框架不主动抓取 |
 
-### 5.2 为什么 A 股中文源没有直接预置
+### 5.2 为什么 A 股中文源最初没有直接预置（结论已于 2026-11-06 部分修订，见第 15 节）
 
 2026-11-05 逐个实测，**没有一个是可直接写死选择器的稳定源**：
 
@@ -529,3 +529,45 @@ node scripts/smoke.ts --base http://localhost:3100               # 站点起来�
 - 10 个本地 commit（`d2c883e` … `96f49f6`）**尚未 push**；`.workbuddy/` 保持未跟踪。
 - 站点本机可用：`http://localhost:3000`（**当时端口；现已改 3100，见 `docs/sop.md`**），4 容器健康，smoke 全过，日报 `daily|2026-11-06` 已落库。
 - 本批只写文档，**不改任何代码**；上述 5 项仍为 deferred，按 `docs/deferred-items.md` 的 R0 → R3 顺序收口。
+
+---
+
+## 15. 金融板块内容不足的修复（2026-11-06）
+
+### 15.1 现象与根因
+
+`/finance` 只有 3 条可见内容，`/ai` 有 60 条（20 : 1）；`publications` 里 AI 81 条、金融 7 条。查库与容器内实测确认是四层叠加，不是「模型不写金融稿」：
+
+| 层 | 发现 |
+|---|---|
+| 信源结构 | AI 18 个 RSS，金融仅 5 个 RSS + 1 个手动反哺 |
+| 源状态 | CNBC Finance / Earnings 因瞬时 `fetch failed` 退避后未恢复（容器内实测 200 / 30 条且日期新鲜）；MarketWatch MarketPulse 返回 2025-07 的旧闻 30 条，被「旧文不刷屏」全部挡掉 ⇒ 金融 5 源里 3 个零产出 |
+| 模型通道 | 82 篇文章 `processing_state=failed`，全部是网关 403；其中 Fed 8 条 + SEC 8 条两个官方金融源全军覆没。先撞 `FreeTierOnly`（固定模型免费额度耗尽），换模型后又撞 `insufficient_user_quota`（网关账户额度为负） |
+| 反哺与门槛 | 6 条反哺里 4 条是端到端验证样本（0–18 分），被 `browseFloor=40` 挡掉；`finFlash` / `finCommentary` 类别从未在后台设置 |
+
+### 15.2 免费源实测（容器内，2026-11-06）
+
+**采用（新增 8 个 + 替换 1 个 feed 地址）**：中新网财经（30 条，中文导语 + 原文链接）、CNBC Top News / Economy、MarketWatch Top Stories / Breaking News、Yahoo Finance 多标的 headline、美联储 press_all、SEC EDGAR 8-K Atom、Investing.com 快讯。全部为 `rss`、T1 或 T2，`site_fulltext` 与 `syndicate_fulltext` 均为 `false`，`initialBackfillLimit` 收敛到 6 以控制首次模型调用量。
+
+**排除**：Google News RSS 虽能取到 95 条中文 A 股新闻，但 `<link>` 302 到同意页，原文链接不可用；人民网财经 RSS 100 条全是 2025-06 旧闻；公共 RSSHub 实例超时；财联社 / 华尔街见闻 / 第一财经 / 央行 / 证监会 / 新浪财经的 RSS 均 404 或空；Bloomberg 证书错、FT 超时、MarketBeat 403。⇒ 原 5.2 节「A 股中文源没有稳定 RSS」的结论**部分修订**：中新网财经可用，但必须按条目日期新鲜度逐个复核，不能按域名想当然。
+
+### 15.3 落地与验收
+
+| 动作 | 落点 |
+|---|---|
+| 金融 RSS 5 → 13 个 | `industry/sources.json`（32 源：31 RSS + 1 external） |
+| 新源进现有库 | `scripts/seed.ts` 是 `ON CONFLICT DO NOTHING`，`./up rebuild` 时 setup 重跑即幂等补入，不覆盖后台改动 |
+| 修 3 个存量源 | seed 不覆盖已有行，单独修 `config.feedUrl`、清 `cursor`、复位 `health` 与 `fail_count` |
+| 模型通道 | `LLM_MODEL` 换成实测兼容 `temperature=0.2` + `json_object` + `thinking:disabled` 的固定模型；网关账户额度计数重置并重启网关后生效 |
+| 积压恢复 | `requeueFailed(null)` 重跑失败文章；额度恢复前重跑只会再失败一次 |
+
+验收（同日实测）：`/api/board/finance` 可见 **3 → 36**、金融 `publications` **7 → 48**（精选 **0 → 15**）、13 个金融 RSS 全部 `health=ok`、当日金融条目 31 条、日报「金融市场」节有内容；`typecheck` 0 错误、`./up rebuild` 的 smoke 全过、脚本 `node --check` 通过。
+
+**未达标项**：失败文章仍有 32 篇（原 82 → 曾降至 0 → 因上游免费额度再次耗尽回升），集中在额度修复前的两次重跑。不反复 requeue 空转，等额度恢复后执行一次 `requeueFailed(null)` 即可补齐。
+
+### 15.4 仍需注意
+
+- **额度是两层**：`insufficient_user_quota` 是网关账户的本地计数（可重置）；`FreeTierOnly` 是上游渠道的免费额度，本地改不了，只能等重置或换渠道。批量重跑会把两层同时打穿，先确认额度再 requeue。
+- 备选 `*:free` 模型里，Nemotron 系列把正文全放进 `reasoning` 字段、`content` 为 null，站内解析不了；`dots-3-note-preview:free` 在较大 `max_tokens` 下会输出自相矛盾的判断。⇒ **不为绕额度换低质模型**，保留 `qwen3.8-27b`（`temperature=0.2` + `json_object` + `thinking:disabled` 全部兼容）。
+- `selection_class` 仍未逐源设置；`finFlash 72` / `finCommentary 78` 属可选降噪，未经样本校准前不改评分门槛数字。
+- Google News / RSSHub / 付费源一律不接；`apps/`、`packages/` 核心代码未改动。

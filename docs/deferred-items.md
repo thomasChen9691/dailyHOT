@@ -144,8 +144,8 @@ docker compose logs --tail 100 worker | grep -i "extract\|llm HTTP"   # 期望�
 
 ### 附带必须记住的两条
 
-- `.env` 里 `COLLECT_ENABLED=false` 会连带**不注册** `registerExtractionJobs`（`apps/worker/src/main.ts:23`），反哺条目会卡死在 `content.extract-body`。跑内容链路必须 `COLLECT_ENABLED=true`；不想抓外站就临时把 23 个 RSS 源设 `enabled=false`（`setup` 不会覆盖）。
-- 别再用 `free-auto`：`LLM_MODEL` 必须固定 `deepseek-v4-pro-0813`（`qwen3.8-27b` 亦可），否则 `temperature=0.2` 会被随机路由模型拒绝。
+- `.env` 里 `COLLECT_ENABLED=false` 会连带**不注册** `registerExtractionJobs`（`apps/worker/src/main.ts:23`），反哺条目会卡死在 `content.extract-body`。跑内容链路必须 `COLLECT_ENABLED=true`；不想抓外站就临时把 31 个 RSS 源设 `enabled=false`（`setup` 不会覆盖）。
+- 别再用 `free-auto`：`LLM_MODEL` 必须固定。2026-11-06 起用 `qwen3.8-27b`（`deepseek-v4-pro-0813` 的免费额度已耗尽，且网关账户余额会被打穿）；换模型后要确认网关 `/v1/chat/completions` 返回 200，否则积压文章重跑仍会全部失败。
 
 ---
 
@@ -302,7 +302,7 @@ PATH=/usr/local/bin:$PATH npm test
 ### 现状（代码依据）
 
 - 定时与出刊**不占平台名额**：`apps/worker/src/schedules.ts` 用 pg-boss 注册十余条容器内 cron，其中 `reports.compose`（`0,30 * * * *`）按 `site/site.ts` 的 `EDITION_TIMES.daily = "09:30"` 判期出刊；`sources.schedule` 每分钟调度到期信源。
-- 内容来源自足：`industry/sources.json` 的 **23 个 RSS 源全部启用**（另有 1 个 `external` 补充源），不反哺也能出内容。
+- 内容来源自足：`industry/sources.json` 的 **31 个 RSS 源全部启用**（另有 1 个 `external` 补充源），不反哺也能出内容。
 - 模型调用在 worker 内完成，不依赖平台内置模型。
 - 反哺入口已是端口无关：`./up ingest` 从 `.env` 的 `SITE_URL` 派生地址。
 - CI 侧只有 1 个 workflow，触发方式为 push / PR / 手动，**没有 `schedule:`**，不占定时配额。
@@ -311,7 +311,7 @@ PATH=/usr/local/bin:$PATH npm test
 
 | 阶段 | 触发条件 | 动作 | 验收 |
 |---|---|---|---|
-| **R0（当前）** | 无限制 | **零改动**：站内 cron + 23 个 RSS 自采 + 09:30 出刊；`./up` 人工兜底 | `./up check` 全绿、`./up smoke` 全过、`./up status` 4 容器 Up |
+| **R0（当前）** | 无限制 | **零改动**：站内 cron + 31 个 RSS 自采 + 09:30 出刊；`./up` 人工兜底 | `./up check` 全绿、`./up smoke` 全过、`./up status` 4 容器 Up |
 | R1 | 限额 ≤5 条 | 清理过期一次性 / 长期暂停任务，同时间窗合并 | 活跃任务数达标，站点数据条数不下降 |
 | R2 | 限额 1–2 条 | 只留 1 条总控负责站外写作，周期动作下沉站内 cron | CSV 仍生成且 `./up ingest` 能入站 |
 | R3 | 平台 0 条 | 本机 launchd 一条 plist → `./up`（幂等）；plist 不入库 | 连续 2 天日报自动落库，数据卷不变 |

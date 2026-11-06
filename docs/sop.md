@@ -103,7 +103,8 @@ ls -l .env
 | `/finance` 空页 | `docker compose exec -T db psql -U aihot -d aihot -c "select category,score from publications order by discovered_at desc limit 10;"` — 低于 40 分会被浏览门槛挡住，属正常 |
 | 日报没有条目 | `docker compose exec -T db psql -U aihot -d aihot -c "select count(*) from publications where selected;"` |
 | 反哺内容迟迟不进站 | `./up ingest` 看当前地址（应为 3100）；`./up ingest --dry-run <csv>` 验证解析；`./up logs` 看 `content.extract-body`；`COLLECT_ENABLED` 必须是 `true` |
-| 模型报 400 / `temperature` 不支持 | `.env` 的 `LLM_MODEL` 改成固定 `deepseek-v4-pro-0813`，别用 `free-auto`；改完 `./up down && ./up` |
+| 模型报 400 / `temperature` 不支持 | `.env` 的 `LLM_MODEL` 改成固定 `qwen3.8-27b`，别用 `free-auto`；改完 `./up rebuild` |
+| 文章大量 `processing_state=failed` | 先看错误：账户额度报 403 要先确认网关额度，上游免费额度报 403 只能等重置或换渠道；恢复后跑一次 `requeueFailed(null)` 补齐积压，别空转重跑 |
 | 次日模型 401/403 | 换一个不过期、不限模型的常驻 token（见本机网关控制台） |
 | 巡检某一项 ✗ | `./up smoke` 单跑看具体路径；改了站点配置就 `./up rebuild` |
 
