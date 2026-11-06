@@ -1,6 +1,6 @@
 # docker compose up -d --build     → http://localhost:3000   (the admin is at /admin)
 # docker compose --profile https up -d --build   → HTTPS for SITE_DOMAIN through Caddy
-name: aihot
+name: dailyhot
 
 x-app: &app
   build: .
@@ -10,7 +10,7 @@ x-app: &app
 x-backend: &backend
   <<: *app
   env_file: .env
-  # Model calls go to the local new-api container on the shared rag-net network.
+  # Model calls go to the configured LLM gateway on the shared external network.
   networks:
     - default
     - rag-net
@@ -107,7 +107,12 @@ networks:
   rag-net:
     external: true
 
+# Keep the original volume names: renaming the compose project would otherwise
+# make Docker look for dailyhot_db / dailyhot_data and hide all existing data.
 volumes:
-  db: {}
-  data: {}
-  caddy: {}
+  db:
+    name: aihot_db
+  data:
+    name: aihot_data
+  caddy:
+    name: aihot_caddy
