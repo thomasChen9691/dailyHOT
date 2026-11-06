@@ -67,12 +67,23 @@
 
 ### 运行与停止
 
+现在统一走一键脚本（会自动自检环境、补 `rag-net`、等健康、跑巡检），见 `docs/sop.md`：
+
 ```bash
-cd /Users/cxt/github/dailyHOT
-docker compose ps                        # 查看状态
-docker compose logs -f worker            # 看处理日志
-docker compose down                      # 停站（保留 db / data volume）
-docker compose up -d                     # 再启动
+./up              # 自检 → 起站 → 巡检 → 打印地址
+./up check        # 只确认环境
+./up status       # 容器状态 + 健康检查
+./up logs         # worker 日志
+./up down         # 停站（保留 db / data volume）
+```
+
+底层等价命令（排查时用）：
+
+```bash
+docker compose ps
+docker compose logs -f worker
+docker compose down
+docker compose up -d --build
 PATH=/usr/local/bin:$PATH node scripts/smoke.ts --base http://localhost:3000
 ```
 

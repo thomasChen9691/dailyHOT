@@ -499,7 +499,8 @@ node scripts/smoke.ts --base http://localhost:3000               # 站点起来�
 
 | 文档 | 职责 |
 |---|---|
-| `docs/sop.md` | 日常运行 SOP：环境前置、起停、09:15 → 09:30 内容链路、发布检查单、故障速查表、机器出口对照、提交纪律、CI 说明 |
+| `docs/sop.md` | **极简命令手册**：`./up` 一键自检 + 起站 + 巡检；`./up check` / `status` / `logs` / `down` / `rebuild` / `smoke`；故障一行对照、发布检查单 |
+| `up` / `scripts/fengze.mjs` | 一键脚本本体（零依赖 Node）：启动前自检、自动创建 `rag-net`、修 `.env` 权限、等 `/api/health`、跑 smoke |
 | `docs/deferred-items.md` | 5 项 deferred 的根因、方案对比、逐步命令、验收标准、需本人拍板的输入 |
 
 ### 14.1 5 项 deferred 的结论摘要

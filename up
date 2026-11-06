@@ -1,0 +1,3 @@
+#!/bin/sh
+# 枫泽观潮 一键入口。逻辑在 scripts/fengze.mjs，用法见 ./up help 或 docs/sop.md
+exec node "$(dirname "$0")/scripts/fengze.mjs" "$@"

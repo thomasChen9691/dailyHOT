@@ -1,7 +1,8 @@
 # Deferred items · 5 项顺延事项的收口方案
 
 > 本文回答「怎么解决」，**不实施代码改动**。每项给出：代码依据 → 方案对比 → 推荐落地步骤 → 验收命令 → 风险。
-> 配套文档：`docs/sop.md`（日常运行）、`docs/plan-ai-finance.md`（方案与历史）、`docs/e2e-verification.md`（本机 Docker 实测）。
+> 配套文档：`docs/sop.md`（极简命令手册，`./up` 一键启停）、`docs/plan-ai-finance.md`（方案与历史）、`docs/e2e-verification.md`（本机 Docker 实测）。
+> 日常启停一律用 `./up` / `./up down`；启动前自检用 `./up check`，本文命令只在收口具体事项时用。
 > 定位不变：**自用 / 免费完全版，不对外变现**，因此凡「导流 / 收费 / 合规对外」的动作一律降级。
 
 ---
