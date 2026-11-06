@@ -7,6 +7,7 @@
 //   ./up status     容器状态 + 健康
 //   ./up logs       worker 日志（Ctrl-C 退出）
 //   ./up smoke      只巡检页面与机器出口
+//   ./up ingest     反哺入站（地址与 token 从 .env 派生，不硬编码端口）
 import { spawnSync } from "node:child_process";
 import { chmodSync, existsSync, readFileSync, readdirSync, statSync } from "node:fs";
 import os from "node:os";
@@ -388,6 +389,117 @@ function status() {
   });
 }
 
+/** Minimal RFC 4180 reader: quoted commas, escaped quotes and embedded newlines. */
+function parseCsv(text) {
+  const rows = [];
+  let row = [], field = "", quoted = false;
+  for (let i = 0; i < text.length; i++) {
+    const ch = text[i];
+    if (quoted) {
+      if (ch === '"') {
+        if (text[i + 1] === '"') { field += '"'; i++; }
+        else quoted = false;
+      } else field += ch;
+    } else if (ch === '"' && field === "") quoted = true;
+    else if (ch === ",") { row.push(field); field = ""; }
+    else if (ch === "\n" || ch === "\r") {
+      if (ch === "\r" && text[i + 1] === "\n") i++;
+      row.push(field); rows.push(row); row = []; field = "";
+    } else field += ch;
+  }
+  if (field || row.length) { row.push(field); rows.push(row); }
+  return rows.filter((r) => r.some((c) => c.trim()));
+}
+
+/** The 09:15 brief CSV uses section,category,content,reason,link. */
+function csvItems(text) {
+  const rows = parseCsv(text.replace(/^\uFEFF/, ""));
+  if (rows.length < 2) return [];
+  const head = rows[0].map((h) => h.trim().toLowerCase());
+  const col = (name) => head.indexOf(name);
+  if (col("content") < 0 || col("link") < 0) throw new Error("CSV 需要 content 与 link 两列");
+  const now = new Date().toISOString();
+  return rows.slice(1).map((r) => {
+    const content = (r[col("content")] ?? "").trim();
+    const link = (r[col("link")] ?? "").trim();
+    if (!content || !link) return null;
+    return {
+      title: content.split(/\r?\n/)[0].slice(0, 160),
+      url: link,
+      publishedAt: now,
+      author: "枫泽观潮 · 每日要闻反哺",
+      raw: {
+        text: [content, (r[col("reason")] ?? "").trim()].filter(Boolean).join("\n\n"),
+        section: (r[col("section")] ?? "").trim(),
+        category: (r[col("category")] ?? "").trim(),
+      },
+    };
+  }).filter(Boolean);
+}
+
+/**
+ * Push collected items into the site. The endpoint and token always come from .env,
+ * so changing PORT never breaks an automation that calls `./up ingest`.
+ *   ./up ingest                     print the current target and payload example
+ *   ./up ingest payload.json        JSON body {sourceId, sourceName, items[]}
+ *   ./up ingest daily_brief.csv     the 09:15 CSV format
+ *   ./up ingest -                   read JSON from stdin
+ */
+async function ingest(file, dry = false) {
+  const env = readEnv();
+  const token = env.INGEST_TOKEN ?? "";
+  const endpoint = `${(env.SITE_URL || BASE).replace(/\/+$/, "")}/api/ingest/items`;
+  if (!file) {
+    console.log(bold("枫泽观潮 · 反哺入站"));
+    console.log(`  目标地址  ${green(endpoint)}`);
+    console.log(`  鉴权      .env 的 INGEST_TOKEN（${token.length >= 16 ? green("已配置") : red("未配置或短于 16 位")}）`);
+    console.log(`  用法      ./up ingest <payload.json | daily_brief.csv | ->   （加 --dry-run 只解析不发送）`);
+    console.log(dim("  地址由 .env 的 SITE_URL 派生；换端口只改 .env 的 PORT + SITE_URL，自动化不用改。\n"));
+    return;
+  }
+  if (token.length < 16) {
+    console.log(red("✗ INGEST_TOKEN 未配置或短于 16 位，接口会返回 401"));
+    process.exit(1);
+  }
+  let payload;
+  try {
+    const raw = file === "-" ? readFileSync(0, "utf8") : readFileSync(path.resolve(ROOT, file), "utf8");
+    payload = /\.csv$/i.test(file)
+      ? { sourceId: "external-fengze-daily", sourceName: "枫泽观潮 · 每日要闻反哺", items: csvItems(raw) }
+      : JSON.parse(raw);
+  } catch (error) {
+    console.log(red(`✗ 读取 / 解析失败：${error.message}`));
+    process.exit(1);
+  }
+  if (!payload || !Array.isArray(payload.items) || !payload.items.length) {
+    console.log(red("✗ payload 需要非空 items[]（CSV 需有 content 与 link 两列且有数据行）"));
+    process.exit(1);
+  }
+  if (dry) {
+    console.log(yellow(`→ 试运行（不发送）：${payload.items.length} 条，目标 ${endpoint}`));
+    const first = payload.items[0];
+    console.log(dim(`  sourceId=${payload.sourceId ?? "(未指定)"}  首条 title=${String(first.title ?? "").slice(0, 60)}  url=${String(first.url ?? "").slice(0, 80)}`));
+    return;
+  }
+  console.log(`→ 反哺 ${payload.items.length} 条到 ${endpoint}`);
+  try {
+    const res = await fetch(endpoint, {
+      method: "POST",
+      headers: { "content-type": "application/json", authorization: `Bearer ${token}` },
+      body: JSON.stringify(payload),
+      signal: AbortSignal.timeout(15000),
+    });
+    const body = await res.text();
+    console.log(`  HTTP ${res.status}  ${body.slice(0, 300)}`);
+    if (!res.ok) process.exit(1);
+    const result = JSON.parse(body);
+    console.log(green(`✓ 反哺完成：收到 ${payload.items.length} 条，新建 ${result.created} 条`));
+  } catch (error) {
+    console.log(red(`✗ 请求失败：${error.message}（先跑 ./up status 确认站点在跑）`));
+    process.exit(1);
+  }
+}
+
 function help() {
   console.log(`${bold("枫泽观潮 · 一键命令")}
   ${green("./up")}          自检 → 自动补环境 → 起站 → 等健康 → 巡检 → 打印地址
@@ -398,8 +510,10 @@ function help() {
   ${green("./up status")}   容器状态 + 健康检查
   ${green("./up logs")}     worker 日志（Ctrl-C 退出）
   ${green("./up smoke")}    只巡检页面与机器出口
+  ${green("./up ingest")}   反哺入站：./up ingest <file.csv|json>，不带参数看当前地址
 
   站点：${BASE}    后台：${BASE}/admin    板块：${BASE}/ai  ${BASE}/finance
+  反哺：${BASE}/api/ingest/items（地址随 .env 自动变，别在自动化里写死）
   端口：.env 的 PORT 与 SITE_URL 必须一致，改完 ./up down && ./up
   手册：docs/sop.md
 `);
@@ -441,6 +555,12 @@ switch (cmd) {
   case "smoke":
     if (!good(smoke())) process.exit(1);
     break;
+  case "ingest":
+  case "push": {
+    const args = process.argv.slice(3);
+    await ingest(args.find((a) => !a.startsWith("--")), args.includes("--dry-run"));
+    break;
+  }
   case "help":
   case "-h":
   case "--help":
