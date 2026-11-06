@@ -3,6 +3,7 @@
 > **读者**：下一次接手本仓库的会话 / 协作者。
 > **脱敏声明**：本文会随仓库上传 GitHub，因此**不含**本机绝对路径、账号、凭证、内网拓扑、平台自动化明细；本机实况只保存在本地工作记忆（`.workbuddy/memory/`，已被 `.git/info/exclude` 排除，不入库）。
 > **配套**：`docs/sop.md`（命令手册）、`docs/deferred-items.md`（6 项收口方案）、`docs/plan-ai-finance.md`（方案与历史）。
+> **后续更新（2026-11-06 16:28）**：本文是 13:11 的**历史快照**，正文数字有意保留当时状态，不改写。此后已完成：15:35 金融信源扩充（24 → **32 源**，`LLM_MODEL` 改 `qwen3.8-27b`，金融板块可见 3 → 36）、15:57 再次 push（`0dad2a6` → `915cca5`，`main` = `origin/main`）、`Check #3`（run `42183534750`）两个 job 全绿；`docs/deferred-items.md` 第 3 项已核对关闭。最新事实以 `docs/plan-ai-finance.md`、`docs/deferred-items.md`、`docs/pending-optimization.md` 与本地工作记忆为准。
 
 ---
 
