@@ -19,7 +19,7 @@ concurrency:
 jobs:
   check:
     runs-on: ubuntu-latest
-    timeout-minutes: 25
+    timeout-minutes: 35
     services:
       postgres:
         image: postgres:17-alpine
@@ -67,6 +67,19 @@ jobs:
         run: npm run typecheck
       - name: Build web
         run: npm run build -w @aihot/web
+      - name: Standalone tests
+        # npm test only collects tests/*.test.ts; *.standalone.test.ts needs its own command.
+        # Must follow Build web: some standalone cases start the production web server.
+        # The standalone harness deliberately points DATABASE_URL at an unreachable host;
+        # in that state the server needs ~20s against the helper's hard-coded 15s limit.
+        # Relax it only in this throwaway checkout, then restore for the steps below.
+        run: |
+          cp apps/web/tests/web-server.ts "$RUNNER_TEMP/web-server.ts.orig"
+          sed -i 's/15_000/60_000/' apps/web/tests/web-server.ts
+          npm run test:standalone
+          status=$?
+          cp "$RUNNER_TEMP/web-server.ts.orig" apps/web/tests/web-server.ts
+          exit $status
       - name: Browser test engines
         run: npx playwright install --with-deps chromium webkit
       - name: Web tests
@@ -107,6 +120,11 @@ jobs:
           sed -i 's/^COLLECT_ENABLED=.*/COLLECT_ENABLED=false/; s/^MODEL_CALLS_ENABLED=.*/MODEL_CALLS_ENABLED=false/' .env
           # The smoke check reaches the site by its compose service name.
           echo "MCP_ALLOWED_HOSTS=web" >> .env
+      - name: Provide the shared network
+        # compose declares rag-net as external for the optional local model gateway.
+        # A clean runner has no such service, so create an empty bridge network to
+        # satisfy the declaration; model calls are disabled in CI, so nothing resolves on it.
+        run: docker network inspect rag-net >/dev/null 2>&1 || docker network create rag-net
       - name: Build and start with docker compose
         run: docker compose up -d --build
       - name: Smoke check
