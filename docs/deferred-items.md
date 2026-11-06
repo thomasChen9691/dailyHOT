@@ -16,7 +16,7 @@
 | 2 | 反哺正文免抓配置 | **短期**：反哺脚本 POST 后补写 `body_text` + `body_status='ok'` 并重新入队（零代码，E2E 已验证）；**中期**：模块级自定义反哺路由一次落正文 | 否（推荐路径） | 否 |
 | 3 | 板块级合成 RSS | 在 `modules/board/server.ts` 的 `http(app)` 加 `/feed/ai.xml`、`/feed/finance.xml`，复用 `loadBoard()` + `escapeXml`/`siteUrl`，并登记 `llms().ways` | 否 | 否 |
 | 4 | 批次 4 品牌素材 | 先改 `changelog.json`（事实，无审美）；再同名覆盖图标；**报头字标必须重跑 `scripts/nameplates.ts`** 并同步 `index.json` | 否 | **是**（视觉确认） |
-| 5 | 全量 web/DB 测试 | **仓库已有 CI 且已装齐 `pg_dump` + Playwright**；3 处补丁已落地（共享网络、`test:standalone`、standalone 冷启动超时适配），push 后看 `Check` | 否（改 `.github/`） | 已授权（11-06） |
+| 5 | 全量 web/DB 测试 | **已收口**：3 处补丁落地（共享网络、`test:standalone`、standalone 冷启动超时适配），首次完整 `Check`（run `42165951823`）的 `check` / `docker` 两个 job 均 `success` | 否（改 `.github/`） | 已授权并已完成 |
 | 6 | 平台工作流配额受限的备用方案 | **方案已成文**（`docs/automation-fallback.md`）：主链路本就不依赖平台自动化；按 R0–R3 阶梯，限制落地时再做名额瘦身 / 本机 launchd | 否 | 否（R0 零改动即可）；实施 R2/R3 才需点头 |
 
 **最关键的三个发现**（下面逐项展开）：

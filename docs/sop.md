@@ -137,4 +137,5 @@ PATH=/usr/local/bin:$PATH npm run build -w @aihot/web
 | `docs/plan-ai-finance.md` | 定制方案、决策记录、全量测试归因 |
 | `docs/e2e-verification.md` | 本机 Docker 端到端实测日志（当时为 3000 端口） |
 | `docs/automation-fallback.md` | 平台工作流数量受限时的备用方案（分层、R0–R3、本机调度模板） |
+| `docs/handoffs/2026-11-06-ops-and-first-push.md` | 会话交接快照：当前状态、工程约定、deferred 状态、下一会话第一件事 |
 | `docs/customize.md` | 引擎自带的定制说明 |
