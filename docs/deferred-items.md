@@ -16,7 +16,7 @@
 | 2 | 反哺正文免抓配置 | **短期**：反哺脚本 POST 后补写 `body_text` + `body_status='ok'` 并重新入队（零代码，E2E 已验证）；**中期**：模块级自定义反哺路由一次落正文 | 否（推荐路径） | 否 |
 | 3 | 板块级合成 RSS | 在 `modules/board/server.ts` 的 `http(app)` 加 `/feed/ai.xml`、`/feed/finance.xml`，复用 `loadBoard()` + `escapeXml`/`siteUrl`，并登记 `llms().ways` | 否 | 否 |
 | 4 | 批次 4 品牌素材 | 先改 `changelog.json`（事实，无审美）；再同名覆盖图标；**报头字标必须重跑 `scripts/nameplates.ts`** 并同步 `index.json` | 否 | **是**（视觉确认） |
-| 5 | 全量 web/DB 测试 | **仓库已有 CI 且已装齐 `pg_dump` + Playwright**；先补 2 个真实缺口（`rag-net` external network、缺 `test:standalone` 步骤），再 push 触发 `Check` | 否（改 `.github/`） | **是**（是否改 CI、是否 push） |
+| 5 | 全量 web/DB 测试 | **仓库已有 CI 且已装齐 `pg_dump` + Playwright**；3 处补丁已落地（共享网络、`test:standalone`、standalone 冷启动超时适配），push 后看 `Check` | 否（改 `.github/`） | 已授权（11-06） |
 | 6 | 平台工作流配额受限的备用方案 | **方案已成文**（`docs/automation-fallback.md`）：主链路本就不依赖平台自动化；按 R0–R3 阶梯，限制落地时再做名额瘦身 / 本机 launchd | 否 | 否（R0 零改动即可）；实施 R2/R3 才需点头 |
 
 **最关键的三个发现**（下面逐项展开）：
@@ -240,26 +240,35 @@ git status --short site/brand site/changelog.json                              #
 
 **坑 2 — CI 漏跑 standalone**：`npm test` 只收 `tests/*.test.ts` 与 `modules/*/tests/*.test.ts`，**不含 `*.standalone.test.ts`**；workflow 里也没有 `npm run test:standalone` 步骤。所以那 244 个测试（含 `modules/board/tests/boards.standalone.test.ts` 的守护断言）在 CI 里根本没跑。
 
-### 落地步骤
+**坑 3 — 补上 standalone 后暴露的冷启动超时（11-06 实测新增）**：`tests/standalone.ts` 故意把 `DATABASE_URL` 指向不可达地址并传给子进程；`tests/malformed-public-paths.standalone.test.ts` 调用的 `startWebServer()` 在这种状态下实测需 **~22 秒**启动生产 web server，而 `apps/web/tests/web-server.ts:84` 硬编码 15 秒超时 ⇒ 该文件 4 条必挂（首条 15009ms，其余连锁）。临时放宽到 60 秒复跑 `ONE_EXIT=0`，4 条全过，确认是环境性、非代码缺陷。
+
+### 落地步骤（11-06 已实施）
 
 1. 在 `.github/workflows/check.yml` 的 `docker` job，`Build and start with docker compose` **之前**加一步（幂等）：
 
 ```yaml
-      - name: Shared model network
-        # compose declares rag-net as external for the local new-api container; CI has no such network.
-        run: docker network create rag-net 2>/dev/null || true
+      - name: Provide the shared network
+        run: docker network inspect rag-net >/dev/null 2>&1 || docker network create rag-net
 ```
 
    备选（不改 CI）：把 `rag-net` 从 `docker-compose.yml` 移到本机专用的 `docker-compose.override.yml` 并加入 `.gitignore`——CI 就不会加载它；代价是本机 override 不进版本库，换机器要重建。
 
-2. 在 `check` job 的 `Typecheck` 之后、`Web tests` 之前加一步：
+2. 在 `check` job 的 **`Build web` 之后**加 `Standalone tests`（不能放前面：部分 standalone 用例要启动生产 web server，依赖构建产物）。同一 run 块内临时放宽冷启动超时并还原，**只在 runner 副本生效，不改仓库里的框架常量**：
 
 ```yaml
       - name: Standalone tests
-        run: npm run test:standalone
+        run: |
+          cp apps/web/tests/web-server.ts "$RUNNER_TEMP/web-server.ts.orig"
+          sed -i 's/15_000/60_000/' apps/web/tests/web-server.ts
+          npm run test:standalone
+          status=$?
+          cp "$RUNNER_TEMP/web-server.ts.orig" apps/web/tests/web-server.ts
+          exit $status
 ```
 
-3. 触发：本人确认后 `git push`（**按约定 push 前需显式列出 deferred items**）；或在 GitHub 上用 `workflow_dispatch` 手动跑一次。看 Actions → `Check` → `Web tests` / `Backend tests` / `Standalone tests` / `docker` 四个结果。
+   另把 `check` job 的 `timeout-minutes` 从 25 提到 **35**，给新增的整组测试留余量；`docker` job 仍为 25。
+
+3. 触发：本人已授权 `git push`（**按约定 push 前需显式列出 deferred items**）；看 Actions → `Check` → `Web tests` / `Backend tests` / `Standalone tests` / `docker` 四个结果。
 4. CI 绿后把数字回填 `docs/plan-ai-finance.md` 13.9 与 `docs/e2e-verification.md`，把本机结论从「环境受限」升级为「CI 已验证」。
 
 ### 不想 push 时的本地等价
@@ -280,13 +289,15 @@ PATH=/usr/local/bin:$PATH npm test
 
 - CI 的 `Smoke check of the built site` 设 `COLLECT_ENABLED=false` / `MODEL_CALLS_ENABLED=false`，空库 smoke 不反哺，**不受「关闭采集会连带停正文 worker」影响**，不用为它改配置。
 - 不要为让本机过测去改 `apps/web/tests/web-server.ts:84` 的 15 秒常量（上游框架文件）；本机的正确做法是「临时放宽 → 复跑 → 还原」，已执行且仓库零残留。
-- `check.yml` 属于 `.github/`，改它是合理的 CI 收口，但仍需本人点头（工程约定要求重大动作先确认）。
+- `check.yml` 属于 `.github/`，改它是合理的 CI 收口；**11-06 已获本人授权并实施**，仓库里的框架常量保持 15 秒不变（仅 runner 副本临时放宽）。
+- CI 绿之后再回填 `docs/plan-ai-finance.md` 13.9 / `docs/e2e-verification.md`；若 `Check` 仍红，先看具体 job 日志再定位，不要预先放宽更多常量。
 
 ---
 
 ## 6. 平台工作流数量受限的备用方案
 
 > 完整方案见 **`docs/automation-fallback.md`**（链路分层、三种限制形态、方案对比、R0–R3 阶梯、launchd 模板与验收清单）。本节只留结论与触发条件。
+> **11-06 用户拍板：R2 / R3 不提前实施**，配额真受限再启动；当前维持 R0 零改动与三条主命令。
 
 ### 现状（代码依据）
 
