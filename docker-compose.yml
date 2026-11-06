@@ -10,6 +10,10 @@ x-app: &app
 x-backend: &backend
   <<: *app
   env_file: .env
+  # Model calls go to the local new-api container on the shared rag-net network.
+  networks:
+    - default
+    - rag-net
   environment: &backend-env
     NODE_ENV: production
     DATABASE_URL: postgres://aihot:${POSTGRES_PASSWORD:-aihot}@db:5432/aihot
@@ -98,6 +102,10 @@ services:
       - caddy:/data
     depends_on:
       - web
+
+networks:
+  rag-net:
+    external: true
 
 volumes:
   db: {}
