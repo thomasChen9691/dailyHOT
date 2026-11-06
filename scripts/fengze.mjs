@@ -1,19 +1,21 @@
 // 枫泽观潮 · 一键启停与环境自检（零依赖，Node 24 原生运行）
 //   ./up            自检 → 自动补环境 → 起站 → 等健康 → 巡检 → 打印地址
 //   ./up check      只自检，不改任何东西
+//   ./up ports      只读扫描本机 compose 端口台账（~/github、~/Projects）
 //   ./up rebuild    强制重建镜像（改了 site/、industry/、modules/、Dockerfile 后用）
 //   ./up down       停站（保留数据卷）
 //   ./up status     容器状态 + 健康
 //   ./up logs       worker 日志（Ctrl-C 退出）
 //   ./up smoke      只巡检页面与机器出口
 import { spawnSync } from "node:child_process";
-import { chmodSync, existsSync, readFileSync, statSync } from "node:fs";
+import { chmodSync, existsSync, readFileSync, readdirSync, statSync } from "node:fs";
+import os from "node:os";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
 process.chdir(ROOT);
-const BASE = "http://localhost:3000";
+const HOME = os.homedir();
 const tty = !!process.stdout.isTTY;
 const paint = (code) => (s) => (tty ? `\x1b[${code}m${s}\x1b[0m` : String(s));
 const green = paint(32), yellow = paint(33), red = paint(31), dim = paint(2), bold = paint(1);
@@ -22,6 +24,9 @@ const REQUIRED = [
   "SITE_URL", "ADMIN_PASSWORD", "SESSION_SECRET", "IMG_PROXY_SIGN_SECRET",
   "POSTGRES_PASSWORD", "INGEST_TOKEN", "LLM_BASE_URL", "LLM_API_KEY", "LLM_MODEL",
 ];
+const SCAN_DIRS = [path.join(HOME, "github"), path.join(HOME, "Projects")];
+const SCAN_MAX_DEPTH = 4;
+const SKIP_DIRS = new Set(["node_modules", ".git", "build", "dist", ".venv", "venv", "__pycache__"]);
 
 function run(bin, args) {
   return spawnSync(bin, args, { cwd: ROOT, encoding: "utf8" });
@@ -31,6 +36,7 @@ function passthrough(bin, args) {
 }
 const good = (r) => r.status === 0 && !r.error;
 const text = (r) => (r.stdout ?? "").trim();
+const shortPath = (f) => (f.startsWith(HOME) ? "~/" + path.relative(HOME, f) : f);
 
 /** Tool shells often inject Node 22; native TS scripts (smoke.ts) need >= 24. */
 function pickNode() {
@@ -44,11 +50,108 @@ function pickNode() {
 
 function readEnv() {
   const map = {};
+  if (!existsSync(".env")) return map;
   for (const line of readFileSync(".env", "utf8").split(/\r?\n/)) {
     const hit = /^([A-Z][A-Z0-9_]*)=(.*)$/.exec(line.trim());
     if (hit) map[hit[1]] = hit[2].trim();
   }
   return map;
+}
+
+/** PORT may be "3100", "127.0.0.1:3100", "[::1]:3100" or "${VAR}:3100". Only the host port matters here. */
+function hostPort(value) {
+  const raw = String(value ?? "").trim();
+  const withBind = /^.*:(\d{1,5})$/.exec(raw);
+  const n = Number(withBind ? withBind[1] : raw);
+  return Number.isInteger(n) && n > 0 && n <= 65535 ? n : 3000;
+}
+
+const ENV = readEnv();
+const PORT = hostPort(ENV.PORT);
+const BASE = `http://localhost:${PORT}`;
+let SITE_PORT = null;
+try {
+  const url = new URL(ENV.SITE_URL || BASE);
+  SITE_PORT = url.port ? Number(url.port) : url.protocol === "https:" ? 443 : 80;
+} catch { /* malformed SITE_URL: reported by check() */ }
+
+/** Top-level compose project name (no leading whitespace, so volume `name:` keys do not match). */
+function composeName() {
+  try {
+    const hit = /^name:\s*["']?([\w-]+)["']?\s*$/m.exec(readFileSync("docker-compose.yml", "utf8"));
+    return hit ? hit[1] : path.basename(ROOT).toLowerCase();
+  } catch { return path.basename(ROOT).toLowerCase(); }
+}
+
+/** All compose files under the two scan roots. Read-only, bounded depth, skips dependency dirs. */
+function composeFiles() {
+  const files = [];
+  function walk(dir, depth) {
+    if (depth > SCAN_MAX_DEPTH || !existsSync(dir)) return;
+    let entries;
+    try { entries = readdirSync(dir, { withFileTypes: true }); } catch { return; }
+    for (const e of entries) {
+      const full = path.join(dir, e.name);
+      if (e.isDirectory()) {
+        if (e.name.startsWith(".") || SKIP_DIRS.has(e.name)) continue;
+        walk(full, depth + 1);
+      } else if (e.isFile() && /^(docker-)?compose([.-][\w.-]+)?\.ya?ml$/.test(e.name)) {
+        files.push(full);
+      }
+    }
+  }
+  for (const dir of SCAN_DIRS) walk(dir, 0);
+  return [...new Set(files)].sort();
+}
+
+/** Parse `ports:` entries of the form [bind:]HOST:CONTAINER. Variable-only hosts are skipped. */
+const PORT_LINE = /^\s*-\s*["']?(?:([\w.\-[\]:]+|\$\{[^}]+\}):)?(\d{2,5}):(\d{2,5})["']?/;
+function declaredPorts() {
+  const rows = [];
+  const files = composeFiles();
+  for (const file of files) {
+    let inPorts = false, indent = -1;
+    const lines = readFileSync(file, "utf8").split(/\r?\n/);
+    lines.forEach((line, i) => {
+      if (/^\s*#/.test(line)) return;
+      const head = /^(\s*)ports:\s*(?:#.*)?$/.exec(line);
+      if (head) { inPorts = true; indent = head[1].length; return; }
+      if (!inPorts) return;
+      if (line.trim()) {
+        const cur = /^(\s*)\S/.exec(line);
+        if (cur && cur[1].length <= indent) { inPorts = false; return; }
+      }
+      const hit = PORT_LINE.exec(line);
+      if (hit) rows.push({ port: Number(hit[2]), target: Number(hit[3]), file, line: i + 1 });
+    });
+  }
+  return { files, rows };
+}
+
+/** Host ports currently published by running containers: port -> container name. */
+function runningPorts() {
+  const map = new Map();
+  const ps = run("docker", ["ps", "--format", "{{.Names}}\t{{.Ports}}"]);
+  if (!good(ps)) return map;
+  for (const line of text(ps).split("\n")) {
+    const [name, ports] = line.split("\t");
+    if (!ports) continue;
+    for (const hit of ports.matchAll(/(\d{2,5})->\d{2,5}\/tcp/g)) map.set(Number(hit[1]), name);
+  }
+  return map;
+}
+
+/** Compose labels: spot containers of this project started from another directory, or leftovers from a renamed project. */
+function projectContainers() {
+  const rows = [];
+  const fmt = '{{.Names}}\t{{.Label "com.docker.compose.project"}}\t{{.Label "com.docker.compose.project.working_dir"}}';
+  const ps = run("docker", ["ps", "-a", "--format", fmt]);
+  if (!good(ps)) return rows;
+  for (const line of text(ps).split("\n")) {
+    const [name, project, wd] = line.split("\t");
+    if (project) rows.push({ name, project, wd: wd ? path.resolve(wd) : "" });
+  }
+  return rows;
 }
 
 /** Read-only environment report. Returns { rows, blocking, env, dockerUp, needsNetwork, needsChmod }. */
@@ -91,6 +194,13 @@ function check() {
       else if (env.LLM_MODEL) add("ok", "模型", "固定模型");
       if (env.COLLECT_ENABLED === "false") add("warn", "采集", "关闭会连带停正文 worker", "跑内容链路时设为 true");
       if (env.MODEL_CALLS_ENABLED === "false") add("warn", "模型调用", "关闭，反哺内容不会分析", "跑内容链路时设为 true");
+
+      if (SITE_PORT !== null && SITE_PORT !== PORT) {
+        add("bad", "端口一致", `PORT=${PORT} 但 SITE_URL 指向 ${SITE_PORT}`,
+          "两个值必须一致，否则 sitemap / RSS / llms.txt 的链接会指向旧端口");
+      } else if (SITE_PORT !== null) {
+        add("ok", "端口一致", `PORT 与 SITE_URL 均为 ${PORT}`);
+      }
     } catch (error) {
       add("bad", ".env", `读取失败：${error.message}`, "确认文件可读");
     }
@@ -103,38 +213,98 @@ function check() {
     else add("ok", "rag-net", "已存在");
 
     const relay = run("docker", ["ps", "--filter", "name=new-api", "--format", "{{.Names}}"]);
-    if (good(relay) && text(relay)) add("ok", "new-api", "容器在运行");
-    else add("warn", "new-api", "未运行，模型调用会失败", "启动 new-api 容器（网页仍可访问）");
+    if (good(relay) && text(relay)) add("ok", "LLM 网关", "容器在运行");
+    else add("warn", "LLM 网关", "未运行，模型调用会失败", "启动网关容器（网页仍可访问）");
+
+    const project = composeName();
+    const containers = projectContainers();
+    const foreign = containers.find((c) => c.project === project && c.wd && c.wd !== ROOT);
+    const stale = containers.find((c) => c.project !== project && c.wd === ROOT);
+    if (foreign) add("bad", "同名 project", `${project} 已被 ${foreign.name} 占用（来自其他目录）`,
+      `先在该目录停站：cd ${foreign.wd} && docker compose down`);
+    else if (stale) add("bad", "旧 project 残留", `${stale.name} 仍属于 project ${stale.project}`,
+      `先清理：docker compose -p ${stale.project} down`);
+    else add("ok", "project", `${project} 无重名占用`);
   }
 
-  const port = run("lsof", ["-nP", "-iTCP:3000", "-sTCP:LISTEN", "-t"]);
+  const port = run("lsof", ["-nP", `-iTCP:${PORT}`, "-sTCP:LISTEN", "-t"]);
   const occupied = !port.error && good(port) && !!text(port);
   const health = run("curl", ["-fsS", "-o", "/dev/null", "-w", "%{http_code}", `${BASE}/api/health`]);
   const ours = good(health) && text(health) === "200";
-  if (occupied && ours) add("ok", "端口 3000", "本站监听中（health 200）");
-  else if (occupied) add("warn", "端口 3000", "被其他程序占用", "lsof -nP -iTCP:3000 查到后关掉，或改 .env 的 PORT");
-  else add("ok", "端口 3000", "空闲");
+  if (occupied && ours) add("ok", `端口 ${PORT}`, "本站监听中（health 200）");
+  else if (occupied) add("bad", `端口 ${PORT}`, "被其他程序占用",
+    `lsof -nP -iTCP:${PORT} 查到后关掉，或改 .env 的 PORT + SITE_URL`);
+  else add("ok", `端口 ${PORT}`, "空闲");
+
+  if (dockerUp) {
+    const clashes = declaredPorts().rows.filter((d) => d.port === PORT && !d.file.startsWith(ROOT));
+    if (clashes.length) add("warn", "端口台账", `${clashes.length} 个其他 compose 也声明了 ${PORT}`,
+      "./up ports 看来源；同时启动会冲突");
+  }
 
   const blocking = rows.filter((r) => r.level === "bad").length;
   const warnings = rows.filter((r) => r.level === "warn").length;
   return { rows, blocking, warnings, env, dockerUp, needsNetwork, needsChmod };
 }
 
-/** Terminal columns: CJK glyphs are double width, so String.padEnd misaligns Chinese labels. */
-const columns = (s) => [...s].reduce((n, ch) => n + (/[\u2E80-\uFFFF]/.test(ch) ? 2 : 1), 0);
+/** Terminal columns: CJK glyphs are double width; ANSI colour codes must not count. */
+const visible = (s) => s.replace(/\x1b\[[0-9;]*m/g, "");
+const columns = (s) => [...visible(s)].reduce((n, ch) => n + (/[\u2E80-\uFFFF]/.test(ch) ? 2 : 1), 0);
 const pad = (s, width) => s + " ".repeat(Math.max(0, width - columns(s)));
 
 function printCheck(report) {
   console.log(bold("枫泽观潮 · 环境自检"));
   for (const r of report.rows) {
     const mark = r.level === "ok" ? green("✓") : r.level === "warn" ? yellow("!") : red("✗");
-    console.log(`  ${mark} ${pad(r.label, 14)} ${r.detail}`);
+    console.log(`  ${mark} ${pad(r.label, 16)} ${r.detail}`);
     if (r.fix && r.level !== "ok") console.log(`      ${dim("→ " + r.fix)}`);
   }
   const summary = report.blocking
     ? red(`${report.blocking} 项阻塞，先修复再启动`)
     : green("环境就绪，可以启动");
   console.log(`  ${summary}${report.warnings ? ` · ${yellow(`${report.warnings} 项提醒`)}` : ""}\n`);
+}
+
+/** Read-only port ledger across both compose roots. Never reads .env values or starts containers. */
+function ports() {
+  const { files, rows } = declaredPorts();
+  const running = runningPorts();
+  const byPort = new Map();
+  const entry = (p) => {
+    if (!byPort.has(p)) byPort.set(p, { port: p, sources: [], targets: new Set() });
+    return byPort.get(p);
+  };
+  for (const d of rows) {
+    const e = entry(d.port);
+    e.sources.push(`${shortPath(d.file)}:${d.line}`);
+    e.targets.add(d.target);
+  }
+  for (const p of running.keys()) entry(p);
+
+  console.log(bold(`枫泽观潮 · 端口台账（只读）`));
+  console.log(dim(`  扫描目录：${SCAN_DIRS.map(shortPath).join("  ")}`));
+  console.log(dim(`  本站：.env PORT=${PORT} → ${BASE}（compose 兜底 3000，CI 无 .env 时用 3000）\n`));
+  console.log(`  ${pad("端口", 8)}${pad("状态", 12)}来源`);
+  const list = [...byPort.values()].sort((a, b) => a.port - b.port);
+  for (const e of list) {
+    const isOurs = e.port === PORT;
+    const live = running.get(e.port);
+    const state = isOurs ? green("← 本站") : live ? yellow("运行中") : dim("仅声明");
+    const where = e.sources.length
+      ? `${e.sources[0]}${e.sources.length > 1 ? dim(`  (+${e.sources.length - 1})`) : ""}`
+      : dim("-");
+    const liveBy = live && !isOurs ? dim(`  [运行: ${live}]`) : "";
+    console.log(`  ${pad(String(e.port), 8)}${pad(state, 12)}${where}${liveBy}`);
+  }
+  const clashes = rows.filter((d) => d.port === PORT && !d.file.startsWith(ROOT));
+  console.log(`\n  扫描 ${files.length} 个 compose，声明 ${rows.length} 条映射，运行中 ${running.size} 个宿主机端口。`);
+  if (clashes.length) {
+    console.log(red(`  ⚠ ${clashes.length} 个其他 compose 也声明了 ${PORT}：`));
+    for (const c of clashes) console.log(red(`      ${shortPath(c.file)}:${c.line}`));
+  } else {
+    console.log(green(`  ✓ 没有其他 compose 声明 ${PORT}，本站端口无冲突。`));
+  }
+  console.log(dim("  仅读取 ports: 声明与运行中容器，不读 .env 值、不启动任何容器、不写文件。\n"));
 }
 
 async function healthy(seconds = 3) {
@@ -207,7 +377,7 @@ async function up(rebuild = false) {
     process.exit(1);
   }
   console.log(`\n${bold(green(`✓ 站点就绪  ${BASE}`))}`);
-  console.log(dim("  ./up status    ./up logs    ./up smoke    ./up down    ./up rebuild\n"));
+  console.log(dim("  ./up status    ./up logs    ./up smoke    ./up ports    ./up down    ./up rebuild\n"));
 }
 
 function status() {
@@ -222,6 +392,7 @@ function help() {
   console.log(`${bold("枫泽观潮 · 一键命令")}
   ${green("./up")}          自检 → 自动补环境 → 起站 → 等健康 → 巡检 → 打印地址
   ${green("./up check")}    只确认环境，不改任何东西
+  ${green("./up ports")}    只读扫描本机 compose 端口台账（${SCAN_DIRS.map(shortPath).join(" / ")}）
   ${green("./up rebuild")}  强制重建镜像（改了 site/ industry/ modules/ Dockerfile 后用）
   ${green("./up down")}     停站，数据卷保留
   ${green("./up status")}   容器状态 + 健康检查
@@ -229,6 +400,7 @@ function help() {
   ${green("./up smoke")}    只巡检页面与机器出口
 
   站点：${BASE}    后台：${BASE}/admin    板块：${BASE}/ai  ${BASE}/finance
+  端口：.env 的 PORT 与 SITE_URL 必须一致，改完 ./up down && ./up
   手册：docs/sop.md
 `);
 }
@@ -249,6 +421,10 @@ switch (cmd) {
     if (report.blocking) process.exit(1);
     break;
   }
+  case "ports":
+  case "port":
+    ports();
+    break;
   case "down":
   case "stop":
     console.log("→ 停站（db / data 数据卷保留）…");
