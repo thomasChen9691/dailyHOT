@@ -1,4 +1,4 @@
-# Deferred items · 6 项顺延事项的收口方案
+# Deferred items · 顺延事项的收口方案
 
 > 本文回答「怎么解决」，**不实施代码改动**。每项给出：代码依据 → 方案对比 → 推荐落地步骤 → 验收命令 → 风险。
 > 配套文档：`docs/sop.md`（极简命令手册，`./up` 一键启停）、`docs/plan-ai-finance.md`（方案与历史）、`docs/e2e-verification.md`（本机 Docker 实测）、`docs/automation-fallback.md`（配额备用方案）。
@@ -18,6 +18,8 @@
 | 4 | 批次 4 品牌素材 | 先改 `changelog.json`（事实，无审美）；再同名覆盖图标；**报头字标必须重跑 `scripts/nameplates.ts`** 并同步 `index.json` | 否 | **是**（视觉确认） |
 | 5 | 全量 web/DB 测试 | **已收口**：3 处补丁落地，首次完整 `Check`（run `42165951823`）两个 job 均 `success`；15:57 再次 push 后 `Check #3`（run `42183534750`）仍全绿 | 否（改 `.github/`） | 已授权并已完成 |
 | 6 | 平台工作流配额受限的备用方案 | **方案已成文**（`docs/automation-fallback.md`）：主链路本就不依赖平台自动化；按 R0–R3 阶梯，限制落地时再做名额瘦身 / 本机 launchd | 否 | 否（R0 零改动即可）；实施 R2/R3 才需点头 |
+| 7 | 关闭正文自动翻译 | **已实施**（`163629e`）：`TRANSLATE_ENABLED=false`，正文保留英文原文 | 是（1 处 `packages/`） | 已拍板 |
+| 8 | 正文抓取兜底（Firecrawl / 渲染服务） | **暂不实施**（2026-11-07 22:04 本人拍板）：不接第三方抓取，抓不到 / 付费墙一律只给摘要，改为在列表标注「仅摘要」（`fde5d3a`）。将来要做时按「只对精选且缺正文兜底」接 Firecrawl | 否（届时新增 provider） | 否（已定：先不做） |
 
 **最关键的三个发现**（下面逐项展开）：
 
@@ -355,6 +357,36 @@ PATH=/usr/local/bin:$PATH npm test
 
 ---
 
+## 8. 正文抓取兜底（Firecrawl / 渲染服务）
+
+**决策（2026-11-07 22:04 本人拍板）**：**不接**第三方抓取服务。抓不到正文、或来源在付费墙后的条目，就只给摘要；同时在列表卡片标注「仅摘要」，让读者不必点进去才发现没有内容（已实施 `fde5d3a`）。
+
+**为什么先不做**：本机唯一缺的是「过反爬 / 渲染 JS」的能力，而这条链路的收益面很窄——全部 369 条里只有 56 条无正文，**精选 51 条里只有 4 条**（约 8%）。为 8% 的条目引入付费依赖与新的失败面，不划算。
+
+**失败源实测（2026-11-07）**：
+
+| 源 | 响应 | 性质 | 渲染服务能解决吗 |
+|---|---|---|---|
+| OpenAI News | 403 | Cloudflare JS challenge | 未知，需实测 |
+| Investing.com | 403 | 反爬 | 未知 |
+| Yahoo Finance（stocktwits 跳转） | 403 | 反爬 | 未知 |
+| Ars Technica | 405 | CDN 拒绝 | 可能 |
+| MarketWatch Top / Breaking | **401** | **付费墙** | **能，但按「付费源不碰」原则不做** |
+| 中新网财经 | 200 | 能抓，属解析/编码失败 | 不需要 |
+
+**`crawl4ai` 自托管为何不选**：本机高负载下用 Chrome `--headless=new --no-sandbox` 打开 `openai.com` 得到的是 `<title>请稍候…</title>` + `challenge-platform`，即 **headless Chromium 过不了这套挑战**；crawl4ai 同为 headless，除非另配 stealth 补丁或住宅代理。它真正能救的只有「200 但解析失败」的中新网一类（5/155），而官方 compose 限 4G 内存，本机 16G 已跑着 PyCharm + Milvus + new-api + n8n + dailyhot 五容器，常驻不划算。仓库已 clone 在 `~/github/crawl4ai`（未部署）。
+
+**将来要做时的最小方案**（成本可控，已被数据验证）：
+1. 新增 `packages/backend/src/providers/render.ts`，调 Firecrawl `POST /v1/scrape`（`formats: ["markdown"]`），markdown 经 `content/markdown.ts` 的 `markdownBody()` 转 html。
+2. **必须走 `providers/receipts.ts` 的 `paidRequest()` + 预算熔断**（`AGENTS.md` 硬规则：付费请求不得绕开回执）。
+3. 触发条件收紧为「`body_status='unconfirmed'` **且** `publications.selected` **且** `sources.site_fulltext`」——按当前节奏约 **1 次/天**，Firecrawl 免费 500 credits 可用一年以上。全量兜底（每天 30–60 条）会在一周内烧完额度，不要那样做。
+4. **域名黑名单写死 `marketwatch.com`**（401 订阅墙），不得为抓取而绕过付费墙。
+5. `.env` 加 `FIRECRAWL_API_KEY` / `RENDER_PROVIDER` / 日预算；`JINA_API_KEY` 目前未配置，Jina 分支等价空转，两者不要同时开。
+
+**验收（届时）**：`articles` 中 OpenAI 条目的 `body_status` 由 `unconfirmed` 变 `ok`、`body_html` 非空，详情页出现正文区块，列表卡片的「仅摘要」标记消失。
+
+---
+
 ## 建议执行顺序与总验收
 
 | 轮次 | 动作 | 完成判据 |
@@ -366,3 +398,4 @@ PATH=/usr/local/bin:$PATH npm test
 
 > 每一轮按 `docs/sop.md` 的检查单走，并**单独 commit**；`.workbuddy/` 与 `.env` 不纳入提交。
 > 第 6 项不进入上表轮次：R0 已完成（零改动），R1–R3 只在平台配额真正受限时按 `docs/automation-fallback.md` 触发。
+> 第 8 项同样不进轮次：已拍板「先不接」，只保留方案与触发条件；真要启用时当作独立一批（新增 provider + 冒烟一条 OpenAI 条目）。
