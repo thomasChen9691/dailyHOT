@@ -360,6 +360,10 @@ export async function translateQuotes(opts: { days?: number; limit?: number; bud
  * again whatever its age. Three failed attempts give an item up; only failures of the item itself count.
  */
 export async function translatePending(opts: { limit?: number; budgetMs?: number } = {}): Promise<{ done: TranslateResult[]; quotes: number }> {
+  // Site owner's call: bodies are read in the language they were written in, so a foreign-language article
+  // shows its original text under a Chinese title instead of a translation. Unset or any other value keeps
+  // the engine's behaviour (translate every selected full-text item).
+  if (process.env.TRANSLATE_ENABLED === "false") return { done: [], quotes: 0 };
   const started = Date.now();
   const pending = await sql<{ article_id: string; language: string | null; text: string | null }[]>`
     SELECT p.article_id,a.language,

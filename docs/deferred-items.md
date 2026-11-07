@@ -332,6 +332,29 @@ PATH=/usr/local/bin:$PATH npm test
 
 ---
 
+## 7. 关闭正文自动翻译（`TRANSLATE_ENABLED`）
+
+**背景**：为让详情页显示正文，把启用中源的 `site_fulltext` 打开、并把有正文的 `publications.body_mode` 回填为 `full`（第 68 行 `rules.ts` 的三态判定）。而 `editorial/translate.ts` 的 `translatePending()` 筛选条件第一行也是 `p.body_mode = 'full'`，因此**「显示正文」与「允许翻译」在引擎里由同一个开关驱动**：worker 一恢复就会把英文正文逐段原位替换成中文，页面主路由 `/items/:id` 默认渲染译文，英文只在 `/items/:id/original` 保留。
+
+**决策（2026-11-07 本人拍板）**：维持**英文原文 + 中文标题/AI 导读**，不做自动翻译。
+
+**改动**：
+- `packages/backend/src/editorial/translate.ts:366` — `translatePending()` 开头加 `if (process.env.TRANSLATE_ENABLED === "false") return { done: [], quotes: 0 };`
+- `.env` 设 `TRANSLATE_ENABLED=false`（`.env.example` 同步说明）
+
+**验收（2026-11-07 21:00 实测）**：
+- 镜像重建后容器内 `translate.ts` 含该判断，`TRANSLATE_ENABLED=false` 已注入
+- 待翻译候选 **46 条**，`content.translate` 返回 `{"done":[],"quotes":0}`，`translation_attempts` **0 行** ⇒ 开关确实在查询前拦截
+- 详情页标签为 `正文 · 原文`，正文为英文原文，无「中文 / 原文」切换器（`item.tsx:552` 仅在 `hasTranslation` 时渲染）
+
+**恢复方式**：`.env` 改 `true` 或删掉该行 → `./up rebuild`。注意会**同时**消耗模型额度并覆盖正文语言。
+
+**若将来要做「一段英文一段中文」对照**：引擎现有的译文是整段原位替换，不提供对照渲染，需改三处——`translate.ts` 的存储格式、`publication/detail.ts` 的 `readingBody()`、`apps/web/app/routes/item.tsx` 的正文区块；属第二处 `packages/`+`apps/` 下游补丁，须同样登记并注意上游合并冲突。
+
+> 中文条目走不到翻译：`translatePending` 取批次前 `filter(!isChineseText(...))`，`translateArticle()` 另有 `already Chinese` 短路；正文抽取（`content/extract.ts`）不调模型。所以中文正文的 token 成本为 0，只有外文全文翻译才产生费用。
+
+---
+
 ## 建议执行顺序与总验收
 
 | 轮次 | 动作 | 完成判据 |
