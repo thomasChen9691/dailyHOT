@@ -30,6 +30,8 @@ export interface ItemRow {
   seat: boolean;
   visibility: string;
   body_mode: "full" | "summary";
+  /** The detail page has a body to read (an article's HTML, or an X post's own text). */
+  has_body: boolean;
   indexable: boolean;
   fact_id: number | null;
   source_name: string;
@@ -54,6 +56,7 @@ export const ITEM_COLUMNS = sql`
   p.article_id AS id, p.title, p.original_title, p.summary, p.reason, p.category, p.tags, p.score,
   p.selected, p.seat, p.channel, p.url, p.published_at, p.discovered_at, p.timeline_at, p.visibility,
   p.body_mode, p.indexable, p.fact_id, s.name AS source_name, s.participation_mode AS source_mode,
+  (a.body_html IS NOT NULL OR (p.channel = 'x' AND a.x_post IS NOT NULL)) AS has_body,
   a.x_post, CASE WHEN p.body_mode = 'full' THEN a.x_article END AS x_article, a.author, a.language,
   CASE WHEN s.kind = 'x_search' AND ${sourceOwnsPost(sql`s.config`, sql`a.x_post->>'handle'`)} THEN s.icon_url END AS author_avatar_url,
   st.public_id::text AS story_public_id, st.title AS story_title,
@@ -171,6 +174,7 @@ export function toItemSummary(row: ItemRow): ItemSummary {
     selected: row.selected,
     channel: row.channel,
     story: row.story_public_id ? { publicId: row.story_public_id, title: row.story_title ?? "" } : null,
+    hasBody: row.has_body,
   };
 }
 
@@ -182,6 +186,7 @@ export function toFeedItemSummary(row: ItemRow): FeedItemSummary {
     id: item.id, title: item.title, summary: item.summary ?? (x?.text || null), reason: item.reason,
     source: item.source, publishedAt: item.publishedAt, timelineAt: item.timelineAt,
     category: item.category, tags: item.tags, score: item.score, selected: item.selected, channel: item.channel,
+    hasBody: item.hasBody,
     x: x ? {
       authorName: x.authorName, handle: x.handle, avatarUrl: x.avatarUrl,
       ...(x.avatarSrcSet ? { avatarSrcSet: x.avatarSrcSet } : {}), media: x.media,

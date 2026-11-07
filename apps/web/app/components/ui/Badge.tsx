@@ -34,3 +34,8 @@ export function SelectedBadge() {
 export function SameEventBadge() {
   return <Badge title="这件事已有另一篇入选精选">同事件</Badge>;
 }
+
+/** A report with no body behind its page: the card's summary is the whole of it. */
+export function SummaryOnlyBadge() {
+  return <Badge title="这个来源没有可读的正文，摘要就是全部内容">仅摘要</Badge>;
+}

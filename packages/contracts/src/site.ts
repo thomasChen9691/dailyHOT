@@ -63,10 +63,16 @@ export interface ItemSummary {
   selected: boolean;
   channel: "news" | "x";
   story: StoryRef | null;
+  /**
+   * Whether the detail page has something to read besides the summary. False when the source
+   * forbids full text, the page could not be read, or the source is behind a paywall: the card's
+   * summary is then the whole of the report, and a list can say so before the reader opens it.
+   */
+  hasBody: boolean;
 }
 
 /** The fields rendered by a site feed card; full original text lives in the item detail. */
-export interface FeedItemSummary extends Pick<ItemSummary, "id" | "title" | "summary" | "reason" | "source" | "publishedAt" | "timelineAt" | "category" | "tags" | "score" | "selected" | "channel"> {
+export interface FeedItemSummary extends Pick<ItemSummary, "id" | "title" | "summary" | "reason" | "source" | "publishedAt" | "timelineAt" | "category" | "tags" | "score" | "selected" | "channel" | "hasBody"> {
   x: (Pick<XPostView, "authorName" | "handle" | "avatarUrl" | "avatarSrcSet" | "media"> & {
     quoted: Omit<NonNullable<XPostView["quoted"]>, "url"> | null;
   }) | null;

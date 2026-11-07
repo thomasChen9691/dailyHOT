@@ -7,7 +7,7 @@ import { IntentLink } from "../../components/ui/IntentLink";
 import type { GroupInfo, FeedItemSummary, TimelineFilters } from "@aihot/contracts/site";
 import { CATEGORY_LABELS } from "@aihot/contracts/taxonomy";
 import { ITEM_COPY } from "@aihot/site";
-import { SameEventBadge, SelectedBadge } from "../../components/ui/Badge";
+import { SameEventBadge, SelectedBadge, SummaryOnlyBadge } from "../../components/ui/Badge";
 import { ScoreLabel } from "../../components/ui/Score";
 import { beijingTime } from "@aihot/contracts/time";
 import { MediaThumbs, SourceLine, StarButton, readTone } from "./parts";
@@ -50,6 +50,11 @@ export const FeedItem = memo(function FeedItem({ item, group, filters, read = fa
             {item.sameEvent ? <SameEventBadge /> : <SelectedBadge />}
           </span>
         )}
+        {!item.hasBody && (
+          <span className="hidden lg:inline-flex">
+            <SummaryOnlyBadge />
+          </span>
+        )}
         <span className="ml-auto flex shrink-0 items-center gap-1 pl-2 lg:gap-1.5">
           <span className="hidden lg:inline-flex">
             <ScoreLabel score={item.score} />
@@ -76,6 +81,11 @@ export const FeedItem = memo(function FeedItem({ item, group, filters, read = fa
               {item.title}
             </IntentLink>
           </h3>
+          {!item.hasBody && (
+            <span className="mt-1.5 flex lg:hidden">
+              <SummaryOnlyBadge />
+            </span>
+          )}
           {item.summary && <p className="mt-1 line-clamp-2 text-[14.5px] leading-[1.7] text-ink-3 lg:mt-2 lg:line-clamp-3 lg:text-[15px] lg:leading-[1.75]">{item.summary}</p>}
         </>
       )}
