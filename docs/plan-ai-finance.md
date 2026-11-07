@@ -570,4 +570,31 @@ node scripts/smoke.ts --base http://localhost:3100               # 站点起来�
 - **额度是两层**：`insufficient_user_quota` 是网关账户的本地计数（可重置）；`FreeTierOnly` 是上游渠道的免费额度，本地改不了，只能等重置或换渠道。批量重跑会把两层同时打穿，先确认额度再 requeue。
 - 备选 `*:free` 模型里，Nemotron 系列把正文全放进 `reasoning` 字段、`content` 为 null，站内解析不了；`dots-3-note-preview:free` 在较大 `max_tokens` 下会输出自相矛盾的判断。⇒ **不为绕额度换低质模型**，保留 `qwen3.8-27b`（`temperature=0.2` + `json_object` + `thinking:disabled` 全部兼容）。
 - `selection_class` 仍未逐源设置；`finFlash 72` / `finCommentary 78` 属可选降噪，未经样本校准前不改评分门槛数字。
-- Google News / RSSHub / 付费源一律不接；`apps/`、`packages/` 核心代码未改动。
+- Google News / RSSHub / 付费源一律不接；本节修复未改 `apps/`、`packages/`。唯一的 `packages/` 下游补丁见第 16 节。
+
+## 16. 下游补丁：模型请求并发闸门（2026-11-07）
+
+### 16.1 为什么动核心
+
+本机可用的模型通道都有一个**账号级并发上限**：`OC · ... Free` 渠道超过 4 个同时请求就回 `429 At most four requests may run at once`（该渠道上游是本机的 `RuiC-oc-ferry` 本地代理，限制为 4）。而站点各队列的 `localConcurrency` 是**彼此独立**的（`content.analyze` 6、`content.extractBody` 4、`events.digest` 3、`events.group` 1、`sources.fetch` 8…），只调其中一两个数字无法保证"总并发 ≤ 4"，还会拖慢正文抽取。
+
+### 16.2 改了什么
+
+| 文件 | 改动 |
+|---|---|
+| `packages/backend/src/providers/concurrency.ts` | 新增模块级信号量工厂 `createLimiter(limit)`：`limit()` 每次调用现读，`0`/未设 = 完全不排队（上游行为不变）；`finally` 释放并把名额直接移交给下一个等待者，避免计数漂移 |
+| `packages/backend/src/providers/llm.ts` | 在 `chatOnce()` 的 `fetch` 外包一层 `limitModelRequests.run()`。槽位覆盖到 `res.text()` 读完为止，与上游"在飞"口径一致；排队发生在 `fetch` 之前，所以排队时间不消耗 `timeoutMs` |
+| `.env.example` | 登记 `LLM_MAX_CONCURRENCY`，注明"各队列并发彼此独立，这个上限管的是所有步骤加起来的总量；不填或 0 = 不限" |
+| `tests/model-failover.test.ts` | 守护测试：4 个并发请求 + 上限 2，断言打到 stub 的并发峰值恰好 2、另外 2 个在等名额、全部最终成功 |
+
+`chatOnce()` 是唯一出网口（analyze / digest / group / translate / reports / 模块队列都经过它），所以一处在位即覆盖全部步骤。
+
+### 16.3 上游合并注意（重要）
+
+这是**唯一一处对 `packages/` 核心的改动**，上游若改动 `providers/llm.ts` 的这一段会产生冲突。合并上游时：保留 `limitModelRequests.run()` 包住 `fetch` + `res.text()` 的结构；`concurrency.ts` 无上游同名文件，冲突概率低。**回滚**：`.env` 里 `LLM_MAX_CONCURRENCY` 置 0 即恢复上游默认行为（不改代码、无数据风险），或直接 revert 该提交。
+
+### 16.4 验收与未达标
+
+已验证：`typecheck` 0 错误（`TSC_EXIT=0`）；`tests/model-failover.test.ts` 8/8 通过（含新用例）；`./up rebuild` 的 smoke 全过；容器内 `LLM_MAX_CONCURRENCY=3` 与 `concurrency.ts` 均在位。
+
+**未验证（阻断在站点之外）**：端到端"不再出现 `At most four requests`"尚未取得证据。原因是 OC 渠道上游那个本地代理已经**卡死**——它认为始终有 4 个请求在飞（站点侧队列已空、无 active job），连单请求都直接 429，且此前发出的请求会在 60s 后 `timeout awaiting response headers`（`new-api` 侧报 `do request failed: Post "http://host.docker.internal:41980/..."`）。这是代理侧的槽位泄漏，只能重启该代理清除，站点这边改任何参数都无法绕过。

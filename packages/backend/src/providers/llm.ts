@@ -12,6 +12,10 @@ import {
   type ReceiptRequest,
 } from "./receipts.ts";
 import { enterModelCircuit, recordModelHealth, type CircuitPermit } from "./circuit.ts";
+import { createLimiter } from "./concurrency.ts";
+
+/** Optional cap for providers whose account allows only a few simultaneous requests. */
+const limitModelRequests = createLimiter(() => Number(process.env.LLM_MAX_CONCURRENCY ?? 0));
 
 export interface ModelSpec extends ModelPreset {
   key: string;
@@ -193,13 +197,19 @@ async function chatOnce<S extends z.ZodType>(opts: ChatJsonOptions<S>, circuit =
       let res: Response;
       let text: string;
       try {
-        res = await fetch(`${baseUrl.replace(/\/$/, "")}/chat/completions`, {
-          method: "POST",
-          headers: { "content-type": "application/json", authorization: `Bearer ${apiKey}` },
-          body: JSON.stringify(body),
-          signal: AbortSignal.timeout(timeoutMs),
+        // The slot covers the whole request, body included: that is what the provider counts as in flight.
+        // Queueing happens before `fetch`, so a queued request does not burn its timeout.
+        const reply = await limitModelRequests.run(async () => {
+          const res = await fetch(`${baseUrl.replace(/\/$/, "")}/chat/completions`, {
+            method: "POST",
+            headers: { "content-type": "application/json", authorization: `Bearer ${apiKey}` },
+            body: JSON.stringify(body),
+            signal: AbortSignal.timeout(timeoutMs),
+          });
+          return { res, text: await res.text() };
         });
-        text = await res.text();
+        res = reply.res;
+        text = reply.text;
         assertAccepted(spec.service, res.status, text);
       } catch (error) {
         const failure = isConnectFailure(error) ? new ProviderRejectedError(`connect failed: ${String(error)}`, null, true) : error;

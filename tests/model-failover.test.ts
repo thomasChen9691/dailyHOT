@@ -1,7 +1,7 @@
 // Failure modes: outages keep charging the primary; concurrent recovery probes flood it; a restart
 // forgets the outage; a saved backup answer is bought again; timeouts lose their billing history;
 // budget, input and output errors accidentally trigger a second provider.
-import { pointModels, Reply, stub, tag } from "./setup.ts";
+import { gate, pointModels, Reply, stub, tag } from "./setup.ts";
 import assert from "node:assert/strict";
 import { after, beforeEach, test } from "node:test";
 import { spawn } from "node:child_process";
@@ -149,4 +149,36 @@ test("429 account refusals stop at the primary while temporary throttling can us
   primaryAnswer = () => new Reply(429, { error: { code: "1302", message: "请求频率过高" } });
   assert.equal((await chatJson({ ...opts, subject: `${opts.subject}-rate`, user: "rate-limited" })).model, "qwen3.8-flash");
   assert.equal(backup.hits(), calls + 1);
+});
+
+// A provider that allows only a few simultaneous requests refuses the rest (the free channels answer
+// "At most four requests may run at once"). Queue concurrency is per queue, so the cap has to sit on
+// the one place every step sends its request through.
+test("LLM_MAX_CONCURRENCY keeps the provider from seeing more requests at once than it allows", async () => {
+  process.env.LLM_MAX_CONCURRENCY = "2";
+  let inFlight = 0;
+  let peak = 0;
+  const release = gate();
+  primaryAnswer = () => {
+    inFlight += 1;
+    peak = Math.max(peak, inFlight);
+    // Held open until the test releases them, so overlapping requests would show up in `peak`.
+    return release.promise.then(() => {
+      inFlight -= 1;
+      return answer("primary");
+    });
+  };
+  try {
+    const calls = Array.from({ length: 4 }, (_, i) => chatJson({ ...request(`cap-${i}`), model: "glm-5.3-flash" }));
+    for (let waited = 0; inFlight < 2 && waited < 2000; waited += 20) await new Promise((r) => setTimeout(r, 20));
+    assert.equal(inFlight, 2, "two requests are let through");
+    await new Promise((r) => setTimeout(r, 100));
+    assert.equal(inFlight, 2, "the other two wait for a free slot");
+    release.open();
+    const answers = await Promise.all(calls);
+    assert.equal(peak, 2, "the provider never sees more than the cap");
+    assert.ok(answers.every((a) => a.model === "glm-5.3-flash"));
+  } finally {
+    delete process.env.LLM_MAX_CONCURRENCY;
+  }
 });
