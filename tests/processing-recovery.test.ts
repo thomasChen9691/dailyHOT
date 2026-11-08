@@ -8,7 +8,7 @@ import { closeDb, sql } from "@aihot/backend/db";
 import { groupArticle } from "@aihot/backend/events/group";
 import { upsertMaterial } from "@aihot/backend/content/materials";
 import { rerun } from "@aihot/backend/admin/content";
-import { processArticle, queueProcessing, registerContentJobs, sweepUnprocessed } from "@aihot/backend/jobs/content";
+import { processArticle, queueProcessing, registerContentJobs, requeueFailed, sweepUnprocessed } from "@aihot/backend/jobs/content";
 import { enqueue, getBoss, QUEUES, stopBoss } from "@aihot/backend/jobs/queue";
 import { recoverStaleWork, releaseReceipt } from "@aihot/backend/operations/recover";
 import { ReceiptUnknownError } from "@aihot/backend/providers/receipts";
@@ -225,4 +225,24 @@ test("historical analysis queues a free identity confirmation behind live news",
   assert.equal(provider.hits(), hits, "historical grouping calls no model");
   const [a] = await sql`SELECT grouping_status FROM articles WHERE id=${id}`;
   assert.equal(a!.grouping_status, "complete");
+});
+
+// Only news inside the reprocess window is worth another model call. Older failures are abandoned
+// by both the admin requeue and the sweep, instead of costing tokens on every restart.
+test("reprocessing skips articles older than the reprocess window", async () => {
+  const recent = await article("window-recent");
+  const old = await article("window-old");
+  await sql`UPDATE articles SET processing_state='failed', processing_error='windowmarker',
+              discovered_at=now()-interval '1 hour' WHERE id=${recent}`;
+  await sql`UPDATE articles SET processing_state='failed', processing_error='windowmarker',
+              discovered_at=now()-interval '10 hours' WHERE id=${old}`;
+  assert.equal((await requeueFailed("windowmarker")).requeued, 1, "only the recent failure is requeued");
+  const [oldRow] = await sql`SELECT processing_state, processing_error FROM articles WHERE id=${old}`;
+  assert.equal(oldRow!.processing_state, "failed");
+  assert.equal(oldRow!.processing_error, "windowmarker");
+
+  await sql`UPDATE articles SET processing_state='new', processing_retry_at=NULL, processing_queued_at=NULL WHERE id=${old}`;
+  await sweepUnprocessed();
+  const [swept] = await sql`SELECT processing_queued_at FROM articles WHERE id=${old}`;
+  assert.equal(swept!.processing_queued_at, null, "the sweep leaves abandoned news alone");
 });

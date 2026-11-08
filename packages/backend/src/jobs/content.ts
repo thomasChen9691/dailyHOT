@@ -5,6 +5,7 @@
 // an article wait and retry with backoff; only a permanent refusal or exhausted retries end in
 // "failed", which the admin re-queues in bulk.
 import type { PgBoss } from "pg-boss";
+import { REPROCESS_WINDOW_HOURS } from "@aihot/site";
 import { sql, type Db } from "../db.ts";
 import { extractArticleBody, pageFetchable } from "../content/extract.ts";
 import { analyzeArticle } from "../editorial/analyze.ts";
@@ -20,7 +21,12 @@ const RETRY_MINUTES = [5, 10, 20, 40, 60, 120, 240, 360];
 const MAX_OUTPUT_FAILURES = 3;
 /** Extraction gives up after this many errors and the article is judged on what it has. */
 const MAX_EXTRACT_FAILURES = 3;
-/** An article queued this long ago is queued again, in case its job was lost. */
+/** An article older than the reprocess window is abandoned: no more retries, no more model calls. */
+function reprocessSince(now = Date.now()): Date {
+  return new Date(now - REPROCESS_WINDOW_HOURS * 3600_000);
+}
+
+/** Queued this long ago is queued again, in case its job was lost. */
 const QUEUED_STALE = "30 minutes";
 
 type Step = "extract" | "analyze";
@@ -176,6 +182,17 @@ async function afterFailure(articleId: string, revision: number, error: unknown)
   if (shutdownSignal.signal.aborted) throw error;
   const message = String(error instanceof Error ? error.message : error).slice(0, 500);
   const kind = failureKind(error);
+  const [a] = await sql<{ processing_attempts: number; discovered_at: Date }[]>`
+    SELECT processing_attempts, discovered_at FROM articles WHERE id = ${articleId} AND revision = ${revision}`;
+  if (!a) return { state: "stale" };
+  // Old news is not worth another paid call: leave it terminal. "skipped" keeps it out of the
+  // sweep, the admin requeue and the stuck-content alert, all of which only read new/failed.
+  if (a.discovered_at < reprocessSince()) {
+    await sql`UPDATE articles SET processing_state = 'skipped', processing_error = ${`abandoned: older than ${REPROCESS_WINDOW_HOURS}h`},
+                processing_attempts = 0, processing_retry_at = NULL, processing_queued_at = NULL
+              WHERE id = ${articleId} AND revision = ${revision}`;
+    return { state: "abandoned" };
+  }
   if (kind === "busy" || kind === "budget") {
     // Not the article's fault: the same request is in flight, or the budget window is full.
     const seconds = error instanceof BudgetExceededError ? error.retryAfterSeconds : 60;
@@ -184,8 +201,6 @@ async function afterFailure(articleId: string, revision: number, error: unknown)
               WHERE id = ${articleId} AND revision = ${revision}`;
     return { state: "waiting", retryAt };
   }
-  const [a] = await sql<{ processing_attempts: number }[]>`SELECT processing_attempts FROM articles WHERE id = ${articleId} AND revision = ${revision}`;
-  if (!a) return { state: "stale" };
   const attempts = a.processing_attempts + 1;
   const refused = kind === "refused";
   const exhausted = attempts > RETRY_MINUTES.length || (kind === "unusable" && attempts >= MAX_OUTPUT_FAILURES);
@@ -249,6 +264,7 @@ export async function sweepUnprocessed(): Promise<{ enqueued: number }> {
   const rows = await sql<{ id: string }[]>`
     SELECT id FROM articles
     WHERE processing_state = 'new' AND created_at < now() - interval '3 minutes'
+      AND discovered_at > ${reprocessSince()}
       AND (processing_retry_at IS NULL OR processing_retry_at <= now())
       AND (processing_queued_at IS NULL OR processing_queued_at < now() - ${QUEUED_STALE}::interval)
     ORDER BY discovered_at DESC LIMIT 500`;
@@ -280,13 +296,14 @@ export const failureGroupSql = (column = "processing_error") =>
   sql.unsafe(`regexp_replace(left(coalesce(${column}, '(no message)'), 120), '[0-9a-f]{8,}|[0-9]{4,}', '…', 'g')`);
 
 /**
- * Admin: failed articles of the last 30 days back into processing, all or one failure group. The
- * first ones are queued now; the sweep picks up the rest within minutes.
+ * Admin: failed articles within the reprocess window back into processing, all or one failure group.
+ * Older failures are abandoned on purpose (they would cost model calls for news nobody reads now).
+ * The first ones are queued now; the sweep picks up the rest within minutes.
  */
 export async function requeueFailed(group: string | null): Promise<{ requeued: number }> {
   const rows = await sql<{ id: string }[]>`
     UPDATE articles SET processing_state = 'new', processing_attempts = 0, processing_retry_at = NULL, processing_error = NULL
-    WHERE processing_state = 'failed' AND discovered_at > now() - interval '30 days'
+    WHERE processing_state = 'failed' AND discovered_at > ${reprocessSince()}
       AND (${group}::text IS NULL OR ${failureGroupSql()} = ${group})
     RETURNING id`;
   for (const r of rows.slice(0, 500)) await queueProcessing(r.id);
