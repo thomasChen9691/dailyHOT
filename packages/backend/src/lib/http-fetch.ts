@@ -26,6 +26,14 @@ let privateFeedAgent: Agent | null = null;
 let pinnedCurve: Agent | null = null;
 let resolveEgress: ReturnType<typeof createEgressResolver> | null = null;
 
+/**
+ * How long a TCP/TLS connection may take. undici's default of 10 s cuts off origins that do answer but
+ * slowly: image.cnbcfm.com was measured at 4–9 s from this host and failed outright past 10 s, turning
+ * an available picture into a 502. The request's own deadline (guardedFetch's abort signal) still
+ * bounds the whole exchange.
+ */
+const CONNECT_TIMEOUT_MS = 15_000;
+
 function egressResolver() {
   return resolveEgress ??= createEgressResolver(config.egressProxyUrl!);
 }
@@ -54,13 +62,13 @@ function dispatcherFor(viaProxy: boolean, privateHost: boolean): Dispatcher | un
   if (config.allowPrivateNetworkFetch) return undefined;
   if (privateHost) {
     // The listed name may resolve to a private service; the address dialled is still checked.
-    privateFeedAgent ??= new Agent({ ...OUTBOUND_HTTP_OPTIONS, factory: destinationPool, connect: {
+    privateFeedAgent ??= new Agent({ ...OUTBOUND_HTTP_OPTIONS, connectTimeout: CONNECT_TIMEOUT_MS, factory: destinationPool, connect: {
       lookup: ((hostname: string, options: never, callback: never) => guardedLookup(hostname, options, callback, config.privateFeedHosts)) as never,
     } });
     return privateFeedAgent;
   }
   // Direct connections resolve through the guarded lookup: the address actually dialled is checked.
-  directAgent ??= new Agent({ ...OUTBOUND_HTTP_OPTIONS, connect: { lookup: guardedLookup as never }, factory: destinationPool });
+  directAgent ??= new Agent({ ...OUTBOUND_HTTP_OPTIONS, connectTimeout: CONNECT_TIMEOUT_MS, connect: { lookup: guardedLookup as never }, factory: destinationPool });
   return directAgent;
 }
 
@@ -75,7 +83,7 @@ function pinnedCurveAgent(): Agent | undefined {
   // With the private-network allowance on, requests already use undici's default agents and no
   // address check runs; pinning a curve would silently re-introduce the check for those hosts.
   if (config.allowPrivateNetworkFetch) return undefined;
-  pinnedCurve ??= new Agent({ ...OUTBOUND_HTTP_OPTIONS, connect: { lookup: guardedLookup as never, ecdhCurve: "prime256v1" }, factory: destinationPool });
+  pinnedCurve ??= new Agent({ ...OUTBOUND_HTTP_OPTIONS, connectTimeout: CONNECT_TIMEOUT_MS, connect: { lookup: guardedLookup as never, ecdhCurve: "prime256v1" }, factory: destinationPool });
   return pinnedCurve;
 }
 

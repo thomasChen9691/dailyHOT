@@ -8,6 +8,14 @@ import { createRenderErrorHandler } from "./lib/render-recovery";
 const documentRelease = document.querySelector('meta[name="aihot-release"]')?.getAttribute("content") ?? null;
 const onError = createRenderErrorHandler(documentRelease);
 
+// A proxied image can fail before hydration attaches any handler (the server's markup starts loading
+// immediately). Listening in the capture phase covers those too: the browser's broken-image glyph is
+// hidden, leaving the surface underneath. Picture's own onError covers later failures.
+window.addEventListener("error", (event) => {
+  const target = event.target;
+  if (target instanceof HTMLImageElement) target.style.visibility = "hidden";
+}, true);
+
 startTransition(() => {
   hydrateRoot(
     document,
