@@ -191,7 +191,8 @@ function check() {
       if (missing.length) add("bad", "必需配置", `缺 ${missing.join(", ")}`, "在 .env 里补齐这些键");
       else add("ok", "必需配置", `${REQUIRED.length}/${REQUIRED.length} 已填`);
 
-      if (env.LLM_MODEL === "free-auto") add("bad", "模型", "free-auto 会触发 400", "改成固定模型，如 qwen3.8-27b");
+      // 400 终止点已从渠道侧消除；free-auto 是否可用取决于网关渠道表，故只提示不阻塞。
+      if (env.LLM_MODEL === "free-auto") add("warn", "模型", "逻辑模型，降级链由网关渠道表决定", "确认链里没有 400 终止点（400 不在重试区间）");
       else if (env.LLM_MODEL) add("ok", "模型", "固定模型");
       if (env.COLLECT_ENABLED === "false") add("warn", "采集", "关闭会连带停正文 worker", "跑内容链路时设为 true");
       if (env.MODEL_CALLS_ENABLED === "false") add("warn", "模型调用", "关闭，反哺内容不会分析", "跑内容链路时设为 true");
