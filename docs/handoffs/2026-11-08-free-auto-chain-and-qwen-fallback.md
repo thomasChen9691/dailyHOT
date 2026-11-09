@@ -179,7 +179,7 @@
 
 | 文档 / 位置 | 定位 |
 |---|---|
-| **本文** | 11-08：兜底链定型、qwen 退场、并发降到 2、主模型切 `free-auto`（§9 为 17:45 追加） |
+| **本文** | 11-08：兜底链定型、qwen 退场、并发降到 2、主模型切 `free-auto`（§9 为 17:45 追加、§10 为 18:50 追加、§11 为 11-09 完工审计） |
 | `docs/handoffs/2026-11-07-fulltext-display-and-model-chain.md` | 前一份：模型链机制、并发闸门补丁、正文显示、翻译关闭（§6 待办仍有效） |
 | `docs/handoffs/2026-11-07-rss-delivery-and-pending.md` | 同日上午：板块级 RSS 与跨项目待拍板 |
 | `docs/handoffs/2026-11-06-ops-and-first-push.md` | 11-06：运维收口与首次 push |
@@ -264,3 +264,54 @@ OR 降级前 `free-auto` 实测 **429 / 30.6s**，日志轨迹 = NVIDIA 主 500 
 - **120s 超时错配已解除**：无需改 `TIMEOUT_MS`、无需换固定模型名（方案 A 暂缓），保留 `free-auto` 的降级能力。代价是 NVIDIA 主渠道仍不稳，后续若 429 频繁会落到 ModelScope（0.5 魔粒/次）或 OpenRouter（常 429），需继续观察。
 - 未执行：换 `LLM_MODEL` 为明确模型名、调高超时、停用 / 删除 muse 渠道、重放历史 `failed`、`git push`。
 - 回滚：把 muse 渠道的 `models` 加回 `free-auto`，并恢复 `{"free-auto":"meta/muse-glimmer-30b"}` 映射即可。
+
+---
+
+## 11. 11-09 09:11 追加：完工审计（全只读）
+
+### 11.1 当前实配与「改动定位」
+
+- 站点 `.env`：`LLM_MODEL=free-auto` / `LLM_MAX_CONCURRENCY=2` / `LLM_REASONING_TOKENS=10000` / `LLM_EXTRA_JSON` 关思考链 / `COLLECT_ENABLED=true` / `MODEL_CALLS_ENABLED=true`。
+- `./up check` 0 阻塞 / 1 提醒、health 200；容器全部 Up，网关容器 Created 未变、`RestartCount=0`。
+- **与 11-08 18:51 网关快照做字段级 diff**：`channels` 全字段、`options` 全量、`abilities` 全量、渠道凭据指纹（sha256）**均无差异** ⇒ 本人所说的「更新了 new-api 容器的一些设置」在网关库 / 凭据 / 容器层面检不出变化。近 24h 唯一可见的仓库改动是站点侧 `f252bc7`（只为近 3 小时的未处理 / 失败新闻再付模型费）。**待本人确认具体改了什么**，确认后补记本节，不要凭猜测写。
+- 运行表现确实改善：近 6h 已无超 120s 请求、NVIDIA 主渠道的 429 由 ModelScope 在 12.5s 内接住；更像上游状态变化或站点侧提交的效果，而非网关配置改动。
+
+### 11.2 运行验证（流程确实跑好了）
+
+| 窗口 | 结果 |
+|---|---|
+| 近 2h | 网关 NVIDIA 主渠道成功 106（avg 4.8s / max 45s）、429 38；ModelScope 成功 38（avg 12.5s / max 50s）；站点 articles analyzed 25 / blocked 1、receipts completed 140，**无 failed / received / unknown** |
+| 近 6h | 546 条请求、**0 条超 120s** |
+| 近 14h | 1337 条日志、**无 400**、muse 命中 0；成功请求最长 307s（集中在 11-08 19:58–22:02 的 10 条，属移除 muse 之后 NVIDIA 主渠道自身抖动，现已消失） |
+| 评分 | 13–25 分共 41 条，分布正常 |
+
+### 11.3 仍存在的问题（按优先级）
+
+**P1-1 ModelScope 魔粒速率超日额度**：近 24h 命中按本地日 = 11-08 73 次（36.5 粒）/ 11-09 244 次（122 粒，00:00–09:11）；按约 13.3 粒/h 推算 24h ≈ **318 粒 > 250 粒/日**。根因 NVIDIA 主渠道 429 率约 26%，几乎每次都降级到 ModelScope 轻量档 0.5 粒/次。额度耗尽 → `auto_ban` 禁用该渠道 → OpenRouter（全 429）→ qwen（403 额度耗尽）→ 链路再断，次日自动恢复。**这是当前最可能在几小时内打断链路的单点。**
+
+**P1-2 12 个信源持续失败 + 告警静默**：`sources` ok 19 / failing 12 / unknown 1；失败源 `fail_count` 7–9、`last_ok` 全停在 11-07 10:32–16:34（CNBC ×4、SEC ×2、Google Research、Microsoft Research、Mistral AI、Hugging Face Blog、Import AI、Investing.com），多为 `fetch failed`，Investing.com 为 HTTP 403。`FEISHU_INTERNAL_ENABLED=false` 与 `FEISHU_CONTENT_PUSH_ENABLED=false` ⇒ 日报 / 周报全部 `not sent`，无人收到提醒。
+
+**P2**：① 全库 `receipts.failed=930`（11-06 起）/ `received=7`（最后一条本地 04:37），近 2h 无新增，属历史积压；② 精选新闻卡去重确认 47 小时；③ `main` 领先 `origin/main` **14 笔未 push**（清单见 §11.4）；④ 本人所说的容器设置改动待确认。
+
+**P3**：日报里 4 个旧模型 403 是历史累计（`packages/` 已无引用、近 14h 日志只有 `free-auto`）；SEC EDGAR 8-K 近 7 天 46 篇缺发布时间；昨晚 10 条超 120s 属历史遗留。
+
+### 11.4 未 push 的 14 笔提交（推送前须显式列 deferred items 并等点头）
+
+```
+704a8dd docs(handoff): 记录移除 muse 解除 120s 超时错配与复测证据
+f252bc7 feat(processing): 只为近 3 小时的未处理/失败新闻再付模型费
+f64884a docs(handoff): 记录主模型切 free-auto、OR 降级与 400 终止点复核
+d66b6f6 fix(up): free-auto 模型自检由阻塞改为提示，链上 400 终止点已消除
+adce249 fix(collect,web): 图片取不到时不留破图，抓取失败干净降级
+b289edd docs: Firecrawl 正文兜底列为第 8 项顺延事项（本人拍板先不接）
+fde5d3a feat(feed): 列表卡片标注没有正文的条目
+ebc3b86 docs: 新增 2026-11-07 正文显示与模型链路交接文档
+ae7a28c docs: 入库 2026-11-07 板块 RSS 交接快照
+163629e feat(i18n): 关闭正文自动翻译，正文保留英文原文
+166f3d9 fix(llm): 给所有模型调用加统一并发闸门
+f6de197 feat(board): 新增两个板块级摘要 RSS（精选席位口径）
+08437d3 docs: RSS 结论翻转为口径 B 实施，定稿机器内可达边界
+2db5a55 docs: 同步接入契约口径，关闭 deferred 第 3 项板块级 RSS
+```
+
+**Deferred（本轮明确未做）**：未修 P1 / P2 任何一项、未重放历史 `failed`、未清理 `received` 残留、未打开飞书告警、未 push；本轮为全只读审计 + 文档更新。
