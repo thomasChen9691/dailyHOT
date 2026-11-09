@@ -21,6 +21,12 @@ x-backend: &backend
     API_BASE_URL: http://api:3001
     # No proxy in front limits pushes to /api/ingest/items: the api does (per client and minute; 0 turns it off).
     INGEST_RATE_LIMIT: ${INGEST_RATE_LIMIT:-10}
+    # Optional outbound proxy for feeds unreachable from the container (Node 24 reads these env vars).
+    # Leave OUTBOUND_PROXY empty on CI / hosts without a proxy; NO_PROXY keeps in-cluster calls direct.
+    NODE_USE_ENV_PROXY: ${NODE_USE_ENV_PROXY:-}
+    HTTP_PROXY: ${OUTBOUND_PROXY:-}
+    HTTPS_PROXY: ${OUTBOUND_PROXY:-}
+    NO_PROXY: ${OUTBOUND_NO_PROXY:-localhost,127.0.0.1,new-api,db,api,web,redis,caddy}
   volumes:
     - data:/data
   depends_on:
