@@ -823,6 +823,79 @@
       "syndicate_fulltext": false
     },
     {
+      "id": "rss-wto-news",
+      "name": "世界贸易组织 · 最新新闻",
+      "kind": "rss",
+      "config": {
+        "feedUrl": "https://www.wto.org/library/rss/latest_news_e.xml",
+        "_aihot": {
+          "initialBackfillLimit": 6
+        }
+      },
+      "tier": "T1",
+      "owner_entity_id": "wto",
+      "participation_mode": "editorial",
+      "interval_minutes": 360,
+      "tags": [
+        "官方",
+        "贸易"
+      ],
+      "site_fulltext": false,
+      "syndicate_fulltext": false
+    },
+    {
+      "id": "rss-ecb-press",
+      "name": "欧洲央行 · 新闻稿",
+      "kind": "rss",
+      "config": {
+        "feedUrl": "https://www.ecb.europa.eu/rss/press.html",
+        "itemUrlPrefixRewrite": {
+          "from": "https://www.ecb.europa.eu//press/",
+          "to": "https://www.ecb.europa.eu/press/"
+        },
+        "_aihot": {
+          "initialBackfillLimit": 6
+        }
+      },
+      "tier": "T1",
+      "owner_entity_id": "ecb",
+      "participation_mode": "editorial",
+      "interval_minutes": 360,
+      "tags": [
+        "官方",
+        "欧元区"
+      ],
+      "site_fulltext": false,
+      "syndicate_fulltext": false
+    },
+    {
+      "id": "web-stats-release",
+      "name": "国家统计局 · 数据发布",
+      "kind": "web_list",
+      "config": {
+        "url": "https://www.stats.gov.cn/sj/zxfb/",
+        "itemSelector": ".list-content ul li",
+        "publishedAtSelector": "span",
+        "publishedAtUtcOffset": "+08:00",
+        "allowUrlPrefixes": [
+          "https://www.stats.gov.cn/sj/zxfb/"
+        ],
+        "_aihot": {
+          "initialBackfillLimit": 6
+        }
+      },
+      "tier": "T1",
+      "owner_entity_id": "nbs",
+      "participation_mode": "editorial",
+      "interval_minutes": 360,
+      "tags": [
+        "官方",
+        "宏观数据"
+      ],
+      "site_fulltext": false,
+      "syndicate_fulltext": false
+    },
+    {
       "id": "external-fengze-daily",
       "name": "枫泽观潮 · 每日要闻反哺",
       "kind": "external",
