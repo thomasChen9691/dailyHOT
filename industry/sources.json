@@ -726,6 +726,87 @@
       "syndicate_fulltext": false
     },
     {
+      "id": "rss-pbc-news",
+      "name": "中国人民银行 · 新闻发布",
+      "kind": "rss",
+      "config": {
+        "feedUrl": "https://www.pbc.gov.cn/goutongjiaoliu/113456/2986536/index.html",
+        "itemUrlPrefixRewrite": {
+          "from": "https://www.pbc.gov.cn/goutongjiaoliu/113456/2986536/www.pbc.gov.cn",
+          "to": "https://www.pbc.gov.cn"
+        },
+        "publishedAtUtcOffset": "+08:00",
+        "detail": {
+          "titleSelector": "h2",
+          "titleAuthoritative": true
+        },
+        "_aihot": {
+          "initialBackfillLimit": 6
+        }
+      },
+      "tier": "T1",
+      "owner_entity_id": "pboc",
+      "participation_mode": "editorial",
+      "interval_minutes": 180,
+      "tags": [
+        "官方",
+        "央行"
+      ],
+      "site_fulltext": false,
+      "syndicate_fulltext": false
+    },
+    {
+      "id": "web-csrc-news",
+      "name": "中国证监会 · 新闻发布",
+      "kind": "web_list",
+      "config": {
+        "url": "https://www.csrc.gov.cn/csrc/xwfb/index.shtml",
+        "itemSelector": ".swiper-slide a",
+        "allowUrlPrefixes": [
+          "https://www.csrc.gov.cn/csrc/"
+        ],
+        "publishedAtUtcOffset": "+08:00",
+        "_aihot": {
+          "initialBackfillLimit": 5
+        }
+      },
+      "tier": "T1",
+      "owner_entity_id": "csrc",
+      "participation_mode": "editorial",
+      "interval_minutes": 180,
+      "tags": [
+        "官方",
+        "监管"
+      ],
+      "site_fulltext": false,
+      "syndicate_fulltext": false
+    },
+    {
+      "id": "web-sse-news",
+      "name": "上交所 · 媒体中心热点",
+      "kind": "web_list",
+      "config": {
+        "url": "https://www.sse.com.cn/aboutus/mediacenter/hotandd/",
+        "allowUrlPrefixes": [
+          "https://www.sse.com.cn/aboutus/mediacenter/hotandd/c/"
+        ],
+        "publishedAtUtcOffset": "+08:00",
+        "_aihot": {
+          "initialBackfillLimit": 6
+        }
+      },
+      "tier": "T1",
+      "owner_entity_id": "sse",
+      "participation_mode": "editorial",
+      "interval_minutes": 360,
+      "tags": [
+        "官方",
+        "A 股"
+      ],
+      "site_fulltext": false,
+      "syndicate_fulltext": false
+    },
+    {
       "id": "external-fengze-daily",
       "name": "枫泽观潮 · 每日要闻反哺",
       "kind": "external",
