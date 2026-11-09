@@ -642,6 +642,90 @@
       "syndicate_fulltext": false
     },
     {
+      "id": "rss-xueqiu-topic",
+      "name": "雪球 · 今日话题",
+      "kind": "rss",
+      "config": {
+        "feedUrl": "https://xueqiu.com/hots/topic/rss",
+        "_aihot": {
+          "initialBackfillLimit": 6
+        }
+      },
+      "tier": "T2",
+      "owner_entity_id": null,
+      "participation_mode": "editorial",
+      "interval_minutes": 120,
+      "tags": [
+        "媒体",
+        "A 股"
+      ],
+      "site_fulltext": false,
+      "syndicate_fulltext": false
+    },
+    {
+      "id": "rss-36kr",
+      "name": "36氪",
+      "kind": "rss",
+      "config": {
+        "feedUrl": "https://www.36kr.com/feed",
+        "_aihot": {
+          "initialBackfillLimit": 6
+        }
+      },
+      "tier": "T2",
+      "owner_entity_id": null,
+      "participation_mode": "editorial",
+      "interval_minutes": 60,
+      "tags": [
+        "媒体",
+        "科技"
+      ],
+      "site_fulltext": false,
+      "syndicate_fulltext": false
+    },
+    {
+      "id": "rss-tmtpost",
+      "name": "钛媒体",
+      "kind": "rss",
+      "config": {
+        "feedUrl": "https://www.tmtpost.com/feed",
+        "_aihot": {
+          "initialBackfillLimit": 6
+        }
+      },
+      "tier": "T2",
+      "owner_entity_id": null,
+      "participation_mode": "editorial",
+      "interval_minutes": 120,
+      "tags": [
+        "媒体",
+        "科技"
+      ],
+      "site_fulltext": false,
+      "syndicate_fulltext": false
+    },
+    {
+      "id": "rss-meituan-tech",
+      "name": "美团技术团队",
+      "kind": "rss",
+      "config": {
+        "feedUrl": "https://tech.meituan.com/feed",
+        "_aihot": {
+          "initialBackfillLimit": 6
+        }
+      },
+      "tier": "T2",
+      "owner_entity_id": null,
+      "participation_mode": "editorial",
+      "interval_minutes": 180,
+      "tags": [
+        "官方",
+        "科技"
+      ],
+      "site_fulltext": false,
+      "syndicate_fulltext": false
+    },
+    {
       "id": "external-fengze-daily",
       "name": "枫泽观潮 · 每日要闻反哺",
       "kind": "external",
