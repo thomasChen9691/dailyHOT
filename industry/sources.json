@@ -1,5 +1,5 @@
 {
-  "$comment": "示范信源：首次启动时导入（scripts/seed.ts），已存在的不会被覆盖。之后在后台“信源”里新建、修改和暂停。字段说明见 docs/customize.md。 标注 enabled=false 的 14 个信源为额度控制临时停用（2026-11-09），额度恢复后把 enabled 改回 true 并在后台/数据库重新启用即可。",
+  "$comment": "示范信源：首次启动时导入（scripts/seed.ts），已存在的不会被覆盖。之后在后台“信源”里新建、修改和暂停。字段说明见 docs/customize.md。 标注 enabled=false 的 16 个信源为额度控制临时停用（2026-11-09，含 21:10 追加的 36氪/MarketWatch bulletins），额度恢复后把 enabled 改回 true 并在后台/数据库重新启用即可。",
   "sources": [
     {
       "id": "rss-openai-news",
@@ -564,7 +564,8 @@
         "美股"
       ],
       "site_fulltext": false,
-      "syndicate_fulltext": false
+      "syndicate_fulltext": false,
+      "enabled": false
     },
     {
       "id": "rss-yahoo-finance",
@@ -695,7 +696,8 @@
         "科技"
       ],
       "site_fulltext": false,
-      "syndicate_fulltext": false
+      "syndicate_fulltext": false,
+      "enabled": false
     },
     {
       "id": "rss-tmtpost",
