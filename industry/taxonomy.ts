@@ -15,14 +15,14 @@ export const CATEGORIES = [
   // ── AI 板块：日报合成「AI 大事」一节 ──────────────────────────────────────
   { key: "ai-models", tagColor: "indigo", label: "模型", feedLabel: "AI 模型", section: "AI 大事", guide: "模型本身的发布、版本、权重开放、能力或价格变化，以及既有榜单上的模型成绩。公布一次跑分不是发布新基准，也不是教程。财报、货币政策和指数调整不属于这一类，归金融板块。" },
   { key: "ai-products", tagColor: "turquoise", label: "产品", feedLabel: "AI 产品", section: "AI 大事", guide: "可使用的 AI 产品、功能、应用、工具、API、平台和工程组件的发布更新。模型厂商发布的推理框架、算子库、硬件适配组件仍是产品，不能因为厂商名归成模型。" },
-  { key: "industry", tagColor: "orange", label: "AI 行业", feedLabel: "AI 行业动态", section: "AI 大事", guide: "已发生的 AI 公司经营、融资并购、人事、合作、诉讼、AI 监管政策、真实安全事故及调查进展。新闻由当事人发帖、带有态度，也不因此变成观点。上市公司常规公告、财报、货币政策归金融板块。" },
+  { key: "industry", tagColor: "orange", label: "AI 行业", feedLabel: "AI 行业动态", section: "AI 大事", guide: "已发生的 AI 公司经营、融资并购、人事、合作、诉讼、AI 监管政策、真实安全事故及调查进展，以及针对 AI 芯片的出口管制与供应链限制（重心在 AI 产业与公司影响时；只讲规则条文本身归「政策监管」）。新闻由当事人发帖、带有态度，也不因此变成观点。上市公司常规公告、财报、货币政策归金融板块。" },
   { key: "paper", tagColor: "violet", label: "论文", feedLabel: "AI 论文", section: "AI 大事", guide: "以新研究方法、实验设计与发现为核心的论文、技术报告、新基准或研究数据集。系统性红队实验属于研究；既有榜单成绩归模型，真实事故的新闻调查归 AI 行业。" },
   { key: "tip", tagColor: "green", label: "教程", feedLabel: "AI 教程", section: "AI 大事", guide: "读者可以照着使用的 AI 方法、提示词、工具用法、工程实践复盘与技术讲解。重点是可复用的做法；单纯发布工具归产品，只有态度和预测而无做法归观点。", commentary: true },
   { key: "opinion", tagColor: "purple", label: "AI 观点", feedLabel: "AI 观点", section: "AI 大事", guide: "重点是对 AI 行业的解释、判断、主张、预测、评论或访谈观点。讨论股市行情、板块涨跌不归这一类，归「市场观点」。", commentary: true },
   // ── 金融板块：日报合成「金融市场」一节 ──────────────────────────────────
-  { key: "finance-policy", tagColor: "red", label: "政策监管", feedLabel: "金融政策与监管", section: "金融市场", guide: "已发生的制度性变化：证监会与交易所规则、货币政策与利率决议、财政与购房贴息、证券执法、会计准则与信息披露要求。只提政策口风、没有正式文件或决议的转述归「市场观点」；AI 模型监管归 AI 行业。" },
+  { key: "finance-policy", tagColor: "red", label: "政策监管", feedLabel: "金融政策与监管", section: "金融市场", guide: "已发生的制度性变化：证监会与交易所规则、货币政策与利率决议、财政与购房贴息、证券执法、会计准则与信息披露要求；关税与贸易措施、出口管制及 WTO 等国际组织规则、CPI/PPI/PMI 等宏观数据发布。只提政策口风、没有正式文件或决议的转述归「市场观点」；AI 模型监管归 AI 行业；针对 AI 芯片的管制若重心在产业与公司影响归 AI 行业，油价、汇率等可核实异动归「美股」。" },
   { key: "finance-a", tagColor: "red", label: "A 股", feedLabel: "A 股公告与财报", section: "金融市场", guide: "沪深北上市公司的公告、业绩预告与财报、分红回购、重大合同与停复牌、指数成分与 ETF 份额及大额异动、北向与两融数据。必须有可核对的主体与数字；无来源的「网传」和荐股贴不归这一类。" },
-  { key: "finance-us", tagColor: "red", label: "美股", feedLabel: "美股与全球市场", section: "金融市场", guide: "美股公司财报与业绩指引、SEC 披露与执法、美联储决议与官员表态、重大 IPO、AI 产业链资本开支变化、主要指数与商品/汇率的可核实异动。仅翻译外媒标题、无原始披露的不算，归「市场观点」。" },
+  { key: "finance-us", tagColor: "red", label: "美股", feedLabel: "美股与全球市场", section: "金融市场", guide: "美股公司财报与业绩指引、SEC 披露与执法、美联储决议与官员表态、重大 IPO、AI 产业链资本开支变化、主要指数与油价等大宗商品、汇率的可核实异动。仅翻译外媒标题、无原始披露的不算，归「市场观点」。" },
   { key: "finance-view", tagColor: "orange", label: "市场观点", feedLabel: "市场观点与复盘", section: "金融市场", guide: "对市场、板块或政策的分析、判断、策略、复盘与访谈观点，以及无增量的盘后流水账。重点是作者的解释而非新发生的事实；有正式公告或正式决议的归前面三类。", commentary: true },
 ] as const satisfies ReadonlyArray<{ key: string; tagColor: string; label: string; feedLabel?: string; section: string; guide: string; commentary?: true }>;
 
@@ -52,19 +52,19 @@ export const CATEGORY_TAGS = [
   "产品更新", "模型发布", "论文/研究", "开源/仓库", "教程/实践", "现象/趋势", "大佬观点", "评测/基准", "安全/对齐", "行业动态", "政策/监管",
   "非AI/通用工具", "其他",
   // 金融板块：首标签必须与 category 表达同一重点
-  "财报/业绩", "监管/规则", "市场异动", "指数/成分", "货币/利率", "资本开支", "并购/IPO", "分红/回购", "公司公告",
+  "财报/业绩", "监管/规则", "市场异动", "指数/成分", "货币/利率", "资本开支", "并购/IPO", "分红/回购", "宏观数据", "公司公告",
 ] as const;
 
 /** 可选的主题标签。 */
 export const TOPIC_TAGS = [
   "Agent", "编码", "推理", "多模态", "语音", "视频", "图像生成", "RAG", "端侧", "数据/训练", "搜索", "部署/工程", "开源生态", "具身智能", "MCP/工具调用",
-  "A 股", "美股", "港股", "美联储", "SEC", "ETF", "半导体", "红利低波", "可转债", "汇率", "利率", "财报", "算力资本开支", "出口管制",
+  "A 股", "美股", "港股", "美联储", "SEC", "ETF", "半导体", "红利低波", "可转债", "汇率", "利率", "财报", "算力资本开支", "出口管制", "关税", "贸易措施", "稀土",
 ] as const;
 
 /** 可选的实体标签（公司、机构、平台）。 */
 export const ENTITY_TAGS = [
   "OpenAI", "Anthropic", "DeepSeek", "DeepMind", "Google", "Meta", "Microsoft", "xAI", "Hugging Face", "GitHub", "arXiv",
-  "NVIDIA", "TSMC", "Apple", "Tesla", "Broadcom", "证监会", "上交所", "深交所", "央行", "美联储", "SEC", "东方财富",
+  "NVIDIA", "TSMC", "Apple", "Tesla", "Broadcom", "证监会", "上交所", "深交所", "央行", "美联储", "SEC", "东方财富", "WTO", "ECB", "国家统计局",
 ] as const;
 
 /** 模型常写的近义词，统一成词表里的写法。 */
@@ -89,6 +89,9 @@ export const TAG_SYNONYMS: Readonly<Record<string, string>> = {
   派息: "分红/回购", 增持: "分红/回购", 减持: "分红/回购",
   披露: "公司公告", 停牌: "公司公告", 复牌: "公司公告",
   "a股": "A 股", "a 股": "A 股",
+  // 宏观与贸易：把模型常写的写法收进本站词表
+  cpi: "宏观数据", ppi: "宏观数据", pmi: "宏观数据", 统计数据: "宏观数据", 经济数据: "宏观数据", 宏观数据发布: "宏观数据",
+  世贸组织: "WTO", wto: "WTO", 欧洲央行: "ECB", ecb: "ECB", 统计局: "国家统计局",
 };
 
 // ── 公司与主体 ──────────────────────────────────────────────────────────────────────────
@@ -129,6 +132,10 @@ export const ENTITIES: Record<string, { name: string; displayTag: string | null;
   apple: { name: "Apple", displayTag: "Apple", aliases: ["Apple", "苹果", "AAPL"], orgNames: ["Apple", "苹果公司"] },
   tesla: { name: "Tesla", displayTag: "Tesla", aliases: ["Tesla", "特斯拉", "TSLA"], orgNames: ["Tesla", "特斯拉"] },
   broadcom: { name: "Broadcom", displayTag: "Broadcom", aliases: ["Broadcom", "博通", "AVGO"], orgNames: ["Broadcom", "博通"] },
+  // ── 宏观·贸易一手披露主体：id 与身份词典、PUBLISHER_DOMAINS 一致 ───────
+  wto: { name: "世界贸易组织", displayTag: "WTO", aliases: ["WTO", "世界贸易组织", "世贸组织"], orgNames: ["World Trade Organization", "WTO", "世界贸易组织"] },
+  ecb: { name: "欧洲央行", displayTag: "ECB", aliases: ["ECB", "欧洲央行", "欧洲中央银行"], orgNames: ["European Central Bank", "ECB", "欧洲央行"] },
+  nbs: { name: "国家统计局", displayTag: "统计局", aliases: ["国家统计局", "统计局", "NBS"], orgNames: ["国家统计局", "National Bureau of Statistics"] },
 };
 
 /**
@@ -181,6 +188,9 @@ export const IDENTITY_LEXICON: ReadonlyArray<{ id: string; name: string; pattern
   { id: "moutai", name: "贵州茅台", patterns: [/贵州茅台|600519/i] },
   { id: "catl", name: "宁德时代", patterns: [/宁德时代|300750/i] },
   { id: "innolight", name: "中际旭创", patterns: [/中际旭创|300308/i] },
+  { id: "wto", name: "世界贸易组织", patterns: [/世界贸易组织|世贸组织|World Trade Organization|\bWTO\b/i] },
+  { id: "ecb", name: "欧洲央行", patterns: [/欧洲央行|欧洲中央银行|European Central Bank|\bECB\b/i] },
+  { id: "nbs", name: "国家统计局", patterns: [/国家统计局|National Bureau of Statistics|\bNBS\b/i] },
   { id: "stock-code", name: "A 股证券代码", patterns: [/\b\d{6}\.(?:SH|SZ|BJ)\b/i] },
 ];
 
@@ -204,6 +214,9 @@ export const PUBLISHER_DOMAINS: ReadonlyArray<{ entityId: string; domains: reado
   { entityId: "pboc", domains: ["pbc.gov.cn"] },
   { entityId: "fed", domains: ["federalreserve.gov"] },
   { entityId: "sec", domains: ["sec.gov"] },
+  { entityId: "wto", domains: ["wto.org"] },
+  { entityId: "ecb", domains: ["ecb.europa.eu"] },
+  { entityId: "nbs", domains: ["stats.gov.cn"] },
 ];
 
 /** 原文里的这些写法也算提到了对应公司。 */
