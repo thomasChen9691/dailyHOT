@@ -14,7 +14,7 @@ export const EDITION_TIMES = { daily: "09:30", weekly: "10:00", monthly: "10:30"
 /**
  * 只有采集后这个小时数内的「未处理 / 处理失败」新闻才允许再排一次处理；超时的直接放弃，
  * 不再重试、不再被补漏或后台批量重处理捡起，避免为过时内容重复付模型费。
- * 自动重试、补漏扫描、后台 requeue 和内容卡住告警都读它。
+ * 自动重试、补漏扫描、后台 requeue、处理入口和内容卡住告警都读它；超窗条目由补漏扫描统一转为 skipped 终态。
  */
 export const REPROCESS_WINDOW_HOURS = 3;
 

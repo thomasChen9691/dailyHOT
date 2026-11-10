@@ -26,6 +26,13 @@ function reprocessSince(now = Date.now()): Date {
   return new Date(now - REPROCESS_WINDOW_HOURS * 3600_000);
 }
 
+/** Terminal state for news that aged out: "skipped" keeps it out of the sweep, requeue and alerts. */
+async function abandonOld(articleId: string, revision: number) {
+  await sql`UPDATE articles SET processing_state = 'skipped', processing_error = ${`abandoned: older than ${REPROCESS_WINDOW_HOURS}h`},
+              processing_attempts = 0, processing_retry_at = NULL, processing_queued_at = NULL
+            WHERE id = ${articleId} AND revision = ${revision}`;
+}
+
 /** Queued this long ago is queued again, in case its job was lost. */
 const QUEUED_STALE = "30 minutes";
 
@@ -135,6 +142,12 @@ async function processingInput(articleId: string) {
 export async function processArticle(articleId: string, opts: { attemptTag?: string } = {}): Promise<{ state: string; retryAt?: Date }> {
   const row = await processingInput(articleId);
   if (!row) return { state: "missing" };
+  // A job queued while the news was fresh can run after the window closes. Stop before any paid step;
+  // an explicit re-evaluation keeps its owner's intent (the admin asked for this call).
+  if (!opts.attemptTag && row.discovered_at < reprocessSince()) {
+    await abandonOld(articleId, row.revision);
+    return { state: "abandoned" };
+  }
   try {
     return await processRevision(articleId, row, opts);
   } catch (error) {
@@ -188,9 +201,7 @@ async function afterFailure(articleId: string, revision: number, error: unknown)
   // Old news is not worth another paid call: leave it terminal. "skipped" keeps it out of the
   // sweep, the admin requeue and the stuck-content alert, all of which only read new/failed.
   if (a.discovered_at < reprocessSince()) {
-    await sql`UPDATE articles SET processing_state = 'skipped', processing_error = ${`abandoned: older than ${REPROCESS_WINDOW_HOURS}h`},
-                processing_attempts = 0, processing_retry_at = NULL, processing_queued_at = NULL
-              WHERE id = ${articleId} AND revision = ${revision}`;
+    await abandonOld(articleId, revision);
     return { state: "abandoned" };
   }
   if (kind === "busy" || kind === "budget") {
@@ -260,7 +271,15 @@ export async function registerExtractionJobs(boss: PgBoss) {
  * job was never created (a crash between write and enqueue), or whose job has waited half an hour
  * (pg-boss refuses the duplicate while it still exists). Returns the jobs actually created.
  */
-export async function sweepUnprocessed(): Promise<{ enqueued: number }> {
+export async function sweepUnprocessed(): Promise<{ enqueued: number; abandoned: number }> {
+  // Retire news that aged out instead of leaving it "new" forever: the stuck-content alert and every
+  // recovery path read only new/failed, so "skipped" is a terminal, unambiguous state.
+  const aged = await sql<{ id: string }[]>`
+    UPDATE articles SET processing_state = 'skipped',
+      processing_error = ${`abandoned: outside ${REPROCESS_WINDOW_HOURS}h reprocess window | `} || left(coalesce(processing_error,'(no message)'),120),
+      processing_attempts = 0, processing_retry_at = NULL, processing_queued_at = NULL
+    WHERE processing_state IN ('new','failed') AND discovered_at <= ${reprocessSince()}
+    RETURNING id`;
   const rows = await sql<{ id: string }[]>`
     SELECT id FROM articles
     WHERE processing_state = 'new' AND created_at < now() - interval '3 minutes'
@@ -270,7 +289,7 @@ export async function sweepUnprocessed(): Promise<{ enqueued: number }> {
     ORDER BY discovered_at DESC LIMIT 500`;
   let enqueued = 0;
   for (const r of rows) if (await queueProcessing(r.id)) enqueued += 1;
-  return { enqueued };
+  return { enqueued, abandoned: aged.length };
 }
 
 /**

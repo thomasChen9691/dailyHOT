@@ -228,7 +228,7 @@ test("historical analysis queues a free identity confirmation behind live news",
 });
 
 // Only news inside the reprocess window is worth another model call. Older failures are abandoned
-// by both the admin requeue and the sweep, instead of costing tokens on every restart.
+// by the admin requeue, the sweep and the job itself, instead of costing tokens on every restart.
 test("reprocessing skips articles older than the reprocess window", async () => {
   const recent = await article("window-recent");
   const old = await article("window-old");
@@ -242,7 +242,30 @@ test("reprocessing skips articles older than the reprocess window", async () => 
   assert.equal(oldRow!.processing_error, "windowmarker");
 
   await sql`UPDATE articles SET processing_state='new', processing_retry_at=NULL, processing_queued_at=NULL WHERE id=${old}`;
-  await sweepUnprocessed();
-  const [swept] = await sql`SELECT processing_queued_at FROM articles WHERE id=${old}`;
-  assert.equal(swept!.processing_queued_at, null, "the sweep leaves abandoned news alone");
+  const sweep = await sweepUnprocessed();
+  assert.ok(sweep.abandoned >= 1, "the sweep retires news that aged out");
+  const [row] = await sql`SELECT processing_state, processing_queued_at, processing_error FROM articles WHERE id=${old}`;
+  assert.equal(row!.processing_state, "skipped", "abandoned news becomes terminal, not waiting forever");
+  assert.equal(row!.processing_queued_at, null, "the sweep does not queue abandoned news");
+  assert.match(row!.processing_error, /abandoned/);
+});
+
+// A job can sit in the queue past the window. Running it must not buy a single model call.
+test("a job that aged out before running is abandoned without a model call", async () => {
+  const id = await article("window-late-job");
+  await sql`UPDATE articles SET processing_state='new', discovered_at=now()-interval '4 hours' WHERE id=${id}`;
+  const hits = provider.hits();
+  assert.equal((await processArticle(id)).state, "abandoned");
+  assert.equal(provider.hits(), hits, "an aged-out job buys no model call");
+  const [row] = await sql`SELECT processing_state, processing_retry_at, processing_error FROM articles WHERE id=${id}`;
+  assert.equal(row!.processing_state, "skipped");
+  assert.equal(row!.processing_retry_at, null);
+  assert.match(row!.processing_error, /abandoned/);
+});
+
+// The owner asking to re-evaluate old news is a paid decision, not an automatic retry.
+test("an explicit re-evaluation still runs for news outside the window", async () => {
+  const id = await article("window-manual");
+  await sql`UPDATE articles SET discovered_at=now()-interval '4 hours' WHERE id=${id}`;
+  assert.notEqual((await processArticle(id, { attemptTag: `admin:${T}` })).state, "abandoned");
 });
