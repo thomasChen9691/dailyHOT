@@ -40,7 +40,19 @@ export const MODELS: Record<string, ModelSpec> = {
   // Read from the environment at call time.
   default: {
     key: "default", service: "llm", baseUrlEnv: "LLM_BASE_URL", apiKeyEnv: "LLM_API_KEY",
-    get model() { return process.env.LLM_MODEL ?? ""; },
+    get model() {
+      // Upstream free pools reset at UTC 00:00 (= 08:00 Asia/Shanghai), so their
+      // quota is usually exhausted during 00:00-08:00 CST (= UTC 16:00-24:00).
+      // Fall back to the local OC Ferry channel in that window. Containers run UTC.
+      // Disable by clearing LLM_NIGHT_MODEL; no rebuild needed to turn it off.
+      const night = process.env.LLM_NIGHT_MODEL?.trim();
+      if (night) {
+        const [start, end] = (process.env.LLM_NIGHT_WINDOW_UTC ?? "16,24").split(",").map(Number);
+        const hour = new Date().getUTCHours();
+        if (hour >= start && hour < end) return night;
+      }
+      return process.env.LLM_MODEL ?? "";
+    },
     get extra() { return extraFromEnv(process.env.LLM_EXTRA_JSON); },
     get reasoningTokens() { return reasoningTokensFromEnv(process.env.LLM_REASONING_TOKENS); },
     get jsonMode() { return process.env.LLM_JSON_MODE !== "false"; },
