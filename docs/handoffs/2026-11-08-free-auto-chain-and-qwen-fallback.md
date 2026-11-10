@@ -179,7 +179,7 @@
 
 | 文档 / 位置 | 定位 |
 |---|---|
-| **本文** | 11-08：兜底链定型、qwen 退场、并发降到 2、主模型切 `free-auto`（§9 17:45 追加、§10 18:50 追加、§11 11-09 完工审计、§12 11-10 免费计费置零） |
+| **本文** | 11-08：兜底链定型、qwen 退场、并发降到 2、主模型切 `free-auto`（§9 17:45、§10 18:50、§11 11-09 审计、§12 11-10 计费置零、§13 11-10 11:22 后续调整） |
 | `docs/handoffs/2026-11-07-fulltext-display-and-model-chain.md` | 前一份：模型链机制、并发闸门补丁、正文显示、翻译关闭（§6 待办仍有效） |
 | `docs/handoffs/2026-11-07-rss-delivery-and-pending.md` | 同日上午：板块级 RSS 与跨项目待拍板 |
 | `docs/handoffs/2026-11-06-ops-and-first-push.md` | 11-06：运维收口与首次 push |
@@ -351,3 +351,31 @@ f6de197 feat(board): 新增两个板块级摘要 RSS（精选席位口径）
 - 未改展示层（`quota_display_type` 仍 USD）、未改任何源码 / 渠道 / 站点 `.env`。
 - 未修 §11 的 P1（ModelScope 魔粒速率超日额度、12 个信源持续失败且飞书告警关闭）、未清理历史回执。
 - 26 小时内 admin session 又从 5 累积到 50，来源未查（下次再撞 `AUTH_SESSION_LIMIT` 时按 §12.2 清理）。
+- **11:22 后续调整**：倍率已由 `0` 改为 `0.01`、并摘除 `ds-deepseek-v4-pro-0813` 渠道的 `free-auto` 别名，见 **§13**；本节 §12 记录的是当时的 0 值，勿按本节现状理解。
+
+---
+
+## 13. 11-10 11:22 追加：倍率 `0 → 0.01`、付费 key 退出 `free-auto` 链
+
+### 13.1 倍率改为 0.01（恢复消耗量可对比）
+
+- 本人反馈：§12 把倍率设为 0 后，控制台消耗量全为 0，**无法对比不同时间段的消耗量**。核实：10:50–11:21 所有 `free-auto` 日志 `quota=0`，但 tokens 仍完整记录（11:19 达 90579）。
+- 处置：`free-auto` 倍率 `0 → 0.01`，使 `quota ≈ tokens/100`，**非零且严格正比于 token**，可按分钟/小时聚合对比消耗量，同时仍几乎不产生额度消耗、不影响其它模型的正常计费。
+- 执行方式同 §12：读完整 `ModelRatio`（236 条）→ 只改一个值 → 整体写回；读回 236 条、其余 235 条零改动；热更新、未改源码 / 容器 / 展示层。本地另有改前完整值备份（sha256 前缀 `fadb9fd2…`）。
+- 验证：后台自然请求 11:22:34 / 11:22:35 → `quota=40 / 34`、`tokens=3997 / 3375`、`ratio=0.01`；按分钟聚合 11:22 得 `quota=74 / tokens=41711`，而 11:21 及之前为 0。
+- **口径提醒**：这是缩放后的**相对消耗量**，不是真实金额；要精确对比用量直接看 `prompt_tokens + completion_tokens`。10:50→11:22 的历史 `quota` 仍为 0，跨时段对比须以改动时刻为分界。
+- 回滚：把 `free-auto` 改回 0 或删掉该条目（恢复默认 37.5）。
+
+### 13.2 摘除付费 key 对应的渠道别名
+
+- 本人要求「把 deepseek 的付费 key 从 `free-auto` 里移除，之后要使用就单独引用」。指认结果：**只摘 `ds-deepseek-v4-pro-0813` 这一个渠道**（DashScope 兼容模式，映射 `deepseek-v4.1-flash-1017`，名字含 deepseek）。
+- 已核实：`deepseek` 官方付费渠道（`api.deepseek.com`）本就 `status=2` 停用且**未挂 `free-auto`**，保持现状；`dashscope-free` 等 4 个 qwen 系渠道虽共用同一 DashScope 凭据，按本人决定仍保留在链上。
+- 执行：该渠道 `models` 去掉 `free-auto`（保留 `deepseek-v4.1-flash-1017`）、`model_mapping` 去掉 `free-auto` 键 → `{}`；渠道 `status=1` / `priority=39` / 凭据均保留，**可直调 `deepseek-v4.1-flash-1017`**（abilities enabled=1）——这就是「之后单独引用」的方式。
+- `free-auto` 链由 11 → **10 个渠道**：NVIDIA 主(200) → ModelScope(185) → OpenRouter ×4(100–97) → qwen 系 ×4(40 / 38 / 37 / 36)。
+- 验证：摘除后 `free-auto` 冒烟 HTTP 200 / 1.2s / 合法 JSON，日志命中 NVIDIA 主与 ModelScope，`ratio=0.01`、`quota` 随 tokens 变化；站点 health 200。**未主动调用该付费 key 做验证**。
+- 回滚：把 `free-auto` 加回该渠道的 `models` 并恢复 `{"free-auto":"deepseek-v4.1-flash-1017"}` 映射。
+
+### 13.3 明确未做
+
+- 未改展示层（`quota_display_type` 仍 USD）、未动源码 / 容器 / 站点 `.env`、未重启。
+- 未修 §11 的 P1（ModelScope 魔粒速率、12 个信源持续失败 + 飞书告警关闭）、未清理历史回执、未 push。
