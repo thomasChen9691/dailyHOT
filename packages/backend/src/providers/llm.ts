@@ -14,8 +14,29 @@ import {
 import { enterModelCircuit, recordModelHealth, type CircuitPermit } from "./circuit.ts";
 import { createLimiter } from "./concurrency.ts";
 
-/** Optional cap for providers whose account allows only a few simultaneous requests. */
-const limitModelRequests = createLimiter(() => Number(process.env.LLM_MAX_CONCURRENCY ?? 0));
+/**
+ * Upstream free pools reset at UTC 00:00 (= 08:00 Asia/Shanghai), so their quota is usually exhausted
+ * during 00:00-08:00 CST (= UTC 16:00-24:00). Containers run UTC, hence the raw getUTCHours compare.
+ * Disable the whole night path by clearing LLM_NIGHT_MODEL; no rebuild needed to turn it off.
+ */
+function inNightWindow(): boolean {
+  if (!process.env.LLM_NIGHT_MODEL?.trim()) return false;
+  const [start, end] = (process.env.LLM_NIGHT_WINDOW_UTC ?? "16,24").split(",").map(Number);
+  const hour = new Date().getUTCHours();
+  return hour >= start && hour < end;
+}
+
+/**
+ * Optional cap for providers whose account allows only a few simultaneous requests.
+ * LLM_NIGHT_MAX_CONCURRENCY lowers it inside the night window only: the local OC Ferry channel
+ * hard-caps at 4 concurrent requests and leaks slots on upstream retry, so the night path must stay
+ * well below that (2 containers x 1) while daytime free-auto keeps its normal throughput.
+ */
+const limitModelRequests = createLimiter(() => {
+  const nightCap = process.env.LLM_NIGHT_MAX_CONCURRENCY?.trim();
+  if (nightCap && inNightWindow()) return Number(nightCap);
+  return Number(process.env.LLM_MAX_CONCURRENCY ?? 0);
+});
 
 export interface ModelSpec extends ModelPreset {
   key: string;
@@ -41,17 +62,8 @@ export const MODELS: Record<string, ModelSpec> = {
   default: {
     key: "default", service: "llm", baseUrlEnv: "LLM_BASE_URL", apiKeyEnv: "LLM_API_KEY",
     get model() {
-      // Upstream free pools reset at UTC 00:00 (= 08:00 Asia/Shanghai), so their
-      // quota is usually exhausted during 00:00-08:00 CST (= UTC 16:00-24:00).
-      // Fall back to the local OC Ferry channel in that window. Containers run UTC.
-      // Disable by clearing LLM_NIGHT_MODEL; no rebuild needed to turn it off.
-      const night = process.env.LLM_NIGHT_MODEL?.trim();
-      if (night) {
-        const [start, end] = (process.env.LLM_NIGHT_WINDOW_UTC ?? "16,24").split(",").map(Number);
-        const hour = new Date().getUTCHours();
-        if (hour >= start && hour < end) return night;
-      }
-      return process.env.LLM_MODEL ?? "";
+      // Night window: swap to the local OC Ferry model (see inNightWindow).
+      return inNightWindow() ? process.env.LLM_NIGHT_MODEL!.trim() : (process.env.LLM_MODEL ?? "");
     },
     get extra() { return extraFromEnv(process.env.LLM_EXTRA_JSON); },
     get reasoningTokens() { return reasoningTokensFromEnv(process.env.LLM_REASONING_TOKENS); },
