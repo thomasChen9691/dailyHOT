@@ -69,6 +69,7 @@
 
 - **P1 观察（用户确认）**：按 23:00（NVIDIA 自行恢复后）起算、01:00 判定；22:31–23:00 的上游挂起不计入；不切渠道，保持选项 A。
 - **自动告警接线（用户选站内 cron）**：新增 `modules/llm-guard`，复用 `ops.alerts` 每 10 分钟一轮与 `ServerModule.alerts()` 扩展点，覆盖巡检手册 §2 中引擎现有检查项未覆盖的 5 类信号（上游挂起、超时率、板块陈旧、思考 token、按日额度）；零新增调度、零环境变量开关、未改 `packages/` / `apps/`。平台自动化按 11-06 拍板不提前实施，站外心跳兜底暂不建。
-- **仍需本人处理**：告警推送通道（`FEISHU_INTERNAL_ENABLED` / `FEISHU_ALERT_*`）；归档 `alerts.state` 里 11-06 / 11-07 的 4 个旧 finding，避免淹没新告警。
-- **部署状态**：镜像重建受 Docker base 层 apt 出网阻塞，容器内是否已生效以重建结果为准（代码本身已通过 typecheck、前端构建、模块单测与告警框架测试）。
+- **告警状态**：5 个历史固定模型 `provider.refused.*` 已归档进 `settings.alerts.archived`，`alerts.state` 从 7 项降到 2 项（`content.process` / `content.grouping` 是当前真实状态，保留）。
+- **仍需本人处理**：告警推送凭证 `FEISHU_ALERT_WEBHOOK_URL` 与 `FEISHU_ALERT_CHAT_ID`（或 `FEISHU_INTERNAL_CHAT_ID`）只从 env / 分组 dotenv 读取，当前三项全空且 `FEISHU_INTERNAL_ENABLED=false`；填完打开开关并重启 api/worker 才会真正推送。AI 不代填凭证。
+- **部署状态**：镜像重建受 Docker base 层 apt 出网阻塞，改由用户授权的**临时热补丁**生效（文件复制进 api/worker + `restart`，不碰镜像），已验证容器内 `alerts()` 可用。补丁在 `--force-recreate` 后会丢，后续小改完成后必须 `./up rebuild` 固化。
 - **deferred 不变**：并发 2→4 评估、P1 结论、3 个无关未提交文件、未 push 提交；push 前需本人确认并显式列出 deferred items。
