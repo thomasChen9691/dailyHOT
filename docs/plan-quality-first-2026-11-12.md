@@ -1,8 +1,24 @@
 # 方案 v2：思考模式、NVIDIA 小模型规避、上游单点挂起
 
-> 2026-11-12 21:25（北京时间）。**只出方案，未改任何代码 / 配置 / 数据库**。
+> 2026-11-12 21:25（北京时间）出方案；**21:45–21:55 已按第 8 节拍板执行 P0**（执行状态见下）。
 > 替代本文 v1（20:45 版，commit `b194ea2`）与 `docs/plan-model-quality-floor.md`。
 > 只写通用结构与实测口径，不含本机地址、凭据、个人信息。
+
+## 执行状态（2026-11-12 21:55）
+
+| 项 | 结果 |
+|---|---|
+| `#33` `free-auto` | 已切到 `nvidia/nemotron-3.5-super-vl-120b-a12b`，网关日志 `upstream_model_name` 已核实 |
+| `#35` `free-auto` | 已切到 `Qwen/Qwen3.8-27B`（用户选定） |
+| `.env` | `LLM_REASONING_TOKENS=10000 → 0`；`LLM_EXTRA_JSON` / `LLM_MAX_CONCURRENCY=2` / `LLM_MODEL=free-auto` **均未改** |
+| api / worker | 已 recreate，容器内环境变量核对通过 |
+| 并发 4 | **按拍板推迟**，维持 2，待上游稳定后单独评估 |
+| 冒烟 | `free-auto` 短请求 3/3 成功（0.6–3.7s）、`reasoning_tokens=0`、JSON 合法 |
+| `unknown` 放行 | 窗口内 13 条，走官方 `releaseReceipt` 路径 `released=13 requeued=8 skipped=0` |
+| 重启代价 | 15 条 `connect failed`（集中在网关停机的 21:45:20–27），按退避重试；非新模型问题 |
+| 回滚点 / 巡检预案 | 见 `docs/llm-failover-runbook.md` |
+
+第 8 节「待拍板」4 项已全部确认：选项 A、`Qwen3.8-27B`、并发 4 推迟、口径确认。**P1 观察 2 小时尚未完成**，评分回升需在观察期后判定。
 
 ## 0. v1 → v2 变更
 
