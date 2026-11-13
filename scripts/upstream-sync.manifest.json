@@ -68,7 +68,7 @@
     { "key": "SITE.poweredBy", "value": null, "reason": "上游默认显示「由 AIHOT 驱动」，AGENTS.md 禁止使用 AIHOT 名字与 Logo" }
   ],
   "featureGates": [
-    { "id": "events-locking", "title": "事件归组合并加锁 / 热度一致性", "kind": "code-behavior", "status": "pending" },
+    { "id": "events-locking", "title": "事件归组合并加锁 / 热度一致性", "kind": "code-behavior", "status": "accepted", "evidence": "tests/events.test.ts 29/29（2026-11-13）" },
     { "id": "job-runs", "title": "任务运行记录绑定进程身份", "kind": "code-behavior", "status": "pending" },
     { "id": "mentions", "title": "正文实体名自动链接（含 ServerModule.mentions 扩展点）", "kind": "code-behavior", "status": "pending" },
     { "id": "article-cover", "title": "正文无图时取 og:image 作封面", "kind": "code-behavior", "status": "pending" },
