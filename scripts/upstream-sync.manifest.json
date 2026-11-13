@@ -1,0 +1,83 @@
+{
+  "schemaVersion": 1,
+  "purpose": "dailyHOT 从 AIHOT 上游同步的可重复流程配置。sync 脚本读取本文件；人读 docs/upstream-sync.md。",
+  "remotes": {
+    "authoritative": "upstream",
+    "authoritativeUrl": "git@github.com:thomasChen9691/AIHOT.git",
+    "mirror": "mirror",
+    "mirrorNote": "本机 AIHOT 完整 clone，可选加速；URL 只存在 .git/config，不写进仓库。缺失时脚本自动走 GitHub 轻量 fetch。"
+  },
+  "fetch": {
+    "strategy": "mirror-first",
+    "authorityCheck": "git ls-remote upstream HEAD",
+    "mirrorRef": "mirror/main",
+    "upstreamRef": "upstream/main",
+    "githubFetchArgs": ["--filter=blob:none", "--no-tags"],
+    "rule": "mirror/main 等于权威 HEAD 时用它（完整对象、秒级、不产生 partial clone）；否则 fetch upstream 并改用 upstream/main。"
+  },
+  "baseline": {
+    "dailyhotInitialCommit": "a5bd263c9b3fdaf5a301825fb40beee427a4d2a2",
+    "upstreamEquivalentCommit": "cd424b0a513c7c8535b6f291b106a3086d6b75bf",
+    "replaceRef": "refs/replace/a5bd263c9b3fdaf5a301825fb40beee427a4d2a2",
+    "note": "两个提交的树完全相同，replace 让 git 找到共同祖先。一次性建立，之后每次 merge 自动复用。",
+    "alignedUpstream": "cd424b0a513c7c8535b6f291b106a3086d6b75bf",
+    "alignedAt": null,
+    "alignedCommit": null
+  },
+  "anchors": [
+    { "path": "packages/backend/src/providers/llm.ts", "mustContain": ["createLimiter", "LLM_MAX_CONCURRENCY"], "what": "模块级并发信号量（唯一授权 packages 补丁）" },
+    { "path": "packages/backend/src/providers/jina.ts", "mustContain": ["UnavailablePageError(\"JINA_API_KEY is not configured\")"], "what": "未配置付费源时降级为页面不可读，不让 job 反复重试" },
+    { "path": "packages/backend/src/editorial/translate.ts", "mustContain": ["TRANSLATE_ENABLED"], "what": "只显示原文，不翻译" },
+    { "path": "packages/backend/src/jobs/content.ts", "mustContain": ["REPROCESS_WINDOW_HOURS", "abandonOld"], "what": "3h 重处理窗口，超窗收口为 skipped" },
+    { "path": "packages/backend/src/lib/http-fetch.ts", "mustContain": ["CONNECT_TIMEOUT_MS = 15_000"], "what": "慢源连接超时放宽" },
+    { "path": "packages/backend/src/publication/items.ts", "mustContain": ["has_body", "hasBody"], "what": "详情页是否有正文可读" },
+    { "path": "packages/contracts/src/site.ts", "mustContain": ["hasBody: boolean"], "what": "契约层同步 hasBody 字段" },
+    { "path": "apps/web/app/features/feed/FeedItem.tsx", "mustContain": ["hasBody"], "what": "列表卡片使用 hasBody" },
+    { "path": "apps/web/app/components/ui/Badge.tsx", "mustContain": ["SummaryOnlyBadge"], "what": "仅摘要角标" },
+    { "path": "apps/web/app/components/ui/Picture.tsx", "mustContain": ["hideBroken"], "what": "图片加载失败时不显示破图" },
+    { "path": "apps/web/app/entry.client.tsx", "mustContain": ["HTMLImageElement"], "what": "hydration 前的破图兜底" },
+    { "path": "apps/web/tests/web-server.ts", "mustContain": ["hasBody: true"], "what": "测试造数带 hasBody" },
+    { "path": "site/site.ts", "mustContain": ["REPROCESS_WINDOW_HOURS"], "what": "3h 窗口常量 + 09:30 出刊" },
+    { "path": "industry/selection.ts", "mustContain": ["browseFloor"], "what": "公开列表 40 分门槛" },
+    { "path": "site/modules/server.ts", "mustContain": ["llm-guard"], "what": "站内巡检告警模块登记" },
+    { "path": "site/package.json", "mustContain": ["@aihot/llm-guard"], "what": "模块依赖登记" },
+    { "path": "Dockerfile", "mustContain": ["modules/llm-guard"], "what": "镜像内复制模块目录" },
+    { "path": "package-lock.json", "mustContain": ["modules/llm-guard"], "what": "workspace 条目；lock 一律重新生成，不抄上游 diff" }
+  ],
+  "conflictPolicy": {
+    "site/site.ts": "manual",
+    "packages/contracts/src/site.ts": "theirs-then-reapply",
+    "packages/backend/src/publication/items.ts": "theirs-then-reapply",
+    "apps/web/app/features/feed/FeedItem.tsx": "theirs-then-reapply",
+    "tests/page-metadata.standalone.test.ts": "manual",
+    "package-lock.json": "regenerate",
+    ".env.example": "manual",
+    "note": "2026-11-13 试合并实测：142 文件自动合并，仅上述 5 个产生内容冲突（各 1 个 hunk）；其余两边都改过的文件由三方合并自行解决。"
+  },
+  "permanentlyDisabled": [
+    { "key": "DINGTALK_CONTENT_PUSH_ENABLED", "reason": "第二推送渠道，已用飞书告警" },
+    { "key": "BAIDU_PUSH_ENABLED", "reason": "SEO 主动推送，自用练手站无收益" },
+    { "key": "X / socialdata / jina 付费路径", "reason": "只用免费源是红线" },
+    { "key": "SITE.poweredBy", "value": null, "reason": "上游默认显示「由 AIHOT 驱动」，AGENTS.md 禁止使用 AIHOT 名字与 Logo" }
+  ],
+  "featureGates": [
+    { "id": "events-locking", "title": "事件归组合并加锁 / 热度一致性", "kind": "code-behavior", "status": "pending" },
+    { "id": "job-runs", "title": "任务运行记录绑定进程身份", "kind": "code-behavior", "status": "pending" },
+    { "id": "mentions", "title": "正文实体名自动链接（含 ServerModule.mentions 扩展点）", "kind": "code-behavior", "status": "pending" },
+    { "id": "article-cover", "title": "正文无图时取 og:image 作封面", "kind": "code-behavior", "status": "pending" },
+    { "id": "seo-surface", "title": "SEO_TITLES / siteVerification / poweredBy / 收录聚焦", "kind": "code-behavior", "status": "pending" },
+    { "id": "daily-highlights", "title": "薄日报补齐今日看点", "kind": "code-behavior", "status": "pending" },
+    { "id": "fast-xml-parser", "title": "RSS 解析依赖 5.11.1 → 5.12.0", "kind": "dependency", "status": "pending" },
+    { "id": "dingtalk-push", "title": "钉钉内容推送", "kind": "config-gated", "status": "rejected" },
+    { "id": "baidu-push", "title": "百度主动推送", "kind": "config-gated", "status": "rejected" }
+  ],
+  "verification": [
+    "git diff --check",
+    "npm run typecheck",
+    "npm run build -w @aihot/web",
+    "DATABASE_URL=postgres://127.0.0.1:55432/<name>_test npm test",
+    "node scripts/smoke.ts --base http://localhost:3100",
+    "检查 anchors 全部命中",
+    "检查 permanentlyDisabled 全部保持关闭"
+  ]
+}
