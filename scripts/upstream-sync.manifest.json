@@ -75,6 +75,7 @@
     { "id": "seo-surface", "title": "SEO_TITLES / siteVerification / poweredBy / 收录聚焦", "kind": "code-behavior", "status": "pending" },
     { "id": "daily-highlights", "title": "薄日报补齐今日看点", "kind": "code-behavior", "status": "pending" },
     { "id": "fast-xml-parser", "title": "RSS 解析依赖 5.11.1 → 5.12.0", "kind": "dependency", "status": "pending" },
+    { "id": "night-model", "title": "UTC 16-24 夜间模型切换与动态并发上限（LLM_NIGHT_*，模板已补、默认关闭）", "kind": "config-gated", "status": "pending" },
     { "id": "dingtalk-push", "title": "钉钉内容推送", "kind": "config-gated", "status": "rejected" },
     { "id": "baidu-push", "title": "百度主动推送", "kind": "config-gated", "status": "rejected" }
   ],
