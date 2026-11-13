@@ -112,35 +112,31 @@ ls -l .env
 
 ---
 
-## 告警在哪儿看（本地演练通道）
+## 告警在哪儿看
 
-告警现在不发飞书，走本机接收端：站点 `POST` 到 `FEISHU_ALERT_WEBHOOK_URL`，脚本落盘并弹 macOS 通知。
+**当前通道：飞书应用消息。** 告警由 `ops.alerts`（worker 每 10 分钟一轮）经 `sendAlert` 发到专用群「枫泽观潮 · 运维告警」，凭证在 `.env` 的 `FEISHU_APP_ID` / `FEISHU_APP_SECRET` / `FEISHU_ALERT_CHAT_ID`，开关 `FEISHU_INTERNAL_ENABLED=true`。告警与反馈不进内容群，内容推送走另一个开关 `FEISHU_CONTENT_PUSH_ENABLED`。
+
+| 项 | 说明 |
+|---|---|
+| 群 | 飞书「枫泽观潮 · 运维告警」（应用「每日新闻」的机器人所在群） |
+| 发送链 | `sendAlert` → 若配了 `FEISHU_ALERT_WEBHOOK_URL` 优先走自定义机器人 → 否则用 App 凭证换 tenant token → `FEISHU_ALERT_CHAT_ID` 群消息 |
+| 内容 | 新告警、重复提醒（now 级 1 小时 / today 级 24 小时）、恢复通知、09:00 系统日报 |
+| 查状态 | 站内 `settings.alerts.state`；重复提醒窗口内不会反复发 |
+
+**离线演练通道（备用，默认停用）**：`scripts/local-alert-sink.mjs` 把告警落盘 `.workbuddy/alerts/<日期>.jsonl` 并弹 macOS 通知。启用时把 `FEISHU_ALERT_WEBHOOK_URL` 填成 `http://host.docker.internal:38765/alert`、清空 `FEISHU_ALERT_CHAT_ID`，并在另一终端起接收端：
 
 ```bash
-# 1. 起接收端（前台，关掉就收不到）
 PATH=/usr/local/bin:$PATH node scripts/local-alert-sink.mjs
-
-# 2. 看最近收到的告警（另开一个终端）
-curl -s http://127.0.0.1:38765/ | tail -30
-cat .workbuddy/alerts/$(date +%F).jsonl     # 当天全部，按行 JSON
-
-# 3. 自己在站外造一条，确认通道活着
-curl -s -X POST http://127.0.0.1:38765/alert -H 'content-type: application/json' \
-  -d '{"msg_type":"text","content":{"text":"🔴 通道自测\n看到这条说明通"}}'
+curl -s http://127.0.0.1:38765/ | tail -30      # 看最近收到的告警
 ```
 
-| 项 | 值 |
-|---|---|
-| `.env` 开关 | `FEISHU_INTERNAL_ENABLED=true`、`FEISHU_ALERT_WEBHOOK_URL=http://host.docker.internal:38765/alert` |
-| 端口 | 脚本默认 `38765`，改 `PORT=` 即可（改完要同步改 `.env` 的 URL 并重启 api/worker） |
-| 弹通知 | 默认开；`ALERT_SINK_NOTIFY=false` 只落盘不弹 |
+**三个必须知道的坑**：
 
-**切回飞书**：只改 `.env` 的 `FEISHU_ALERT_WEBHOOK_URL` 为飞书群自定义机器人地址，其余不动，然后 `docker compose up -d api worker`。
+1. 用离线接收端时，`OUTBOUND_NO_PROXY` 必须含 `host.docker.internal`，否则容器 `fetch` 会把请求交给 `OUTBOUND_PROXY`（Clash）而失败；改完 `.env` 必须 `docker compose up -d api worker`（`restart` 不会重读 `.env`）。飞书通道走正常出站代理，不受影响。
+2. `FEISHU_ALERT_WEBHOOK_URL` 一旦非空就**优先**于 App 群消息，切换时务必把上一套通道的值清干净。
+3. 通道不可用时 `sendAlert` 会抛错并让整轮 `ops.alerts` 记为失败（`alerts.ts:567` 没有兜底）——不是静默降级。长期不发告警时把 `FEISHU_INTERNAL_ENABLED` 改回 `false`。
 
-**两个必须知道的坑**：
-
-1. `OUTBOUND_NO_PROXY` 必须含 `host.docker.internal`。否则容器里的 `fetch` 会把这个请求发给 `OUTBOUND_PROXY`（Clash），必然失败。改完 `.env` 必须 `up -d`（`restart` 不会重读 `.env`）。
-2. 接收端没起时，`sendAlert` 会抛错并让整轮 `ops.alerts` 记为失败——告警通道是不可用即失败，不是静默降级。长期不发告警时把 `FEISHU_INTERNAL_ENABLED` 改回 `false`。
+> `up -d` 会重建容器，热补丁（如 `modules/llm-guard`）会丢，需重新 `docker cp` + 软链接 + `restart`；改完后统一 `./up rebuild` 固化。
 
 ---
 
