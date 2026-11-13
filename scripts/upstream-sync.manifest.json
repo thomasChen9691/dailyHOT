@@ -70,7 +70,7 @@
   "featureGates": [
     { "id": "events-locking", "title": "事件归组合并加锁 / 热度一致性", "kind": "code-behavior", "status": "accepted", "evidence": "tests/events.test.ts 29/29（2026-11-13）" },
     { "id": "job-runs", "title": "任务运行记录绑定进程身份", "kind": "code-behavior", "status": "accepted", "evidence": "tests/queue-recovery.test.ts 3/4；唯一失败为 macOS spawn ps EPERM，生产 linux 走 /proc 分支（已验证 boot_id 与 stat 可读）" },
-    { "id": "mentions", "title": "正文实体名自动链接（含 ServerModule.mentions 扩展点）", "kind": "code-behavior", "status": "pending" },
+    { "id": "mentions", "title": "正文实体名自动链接（含 ServerModule.mentions 扩展点）", "kind": "code-behavior", "status": "accepted", "evidence": "tests/mentions.test.ts 3/3、mentions.standalone + page-links.standalone 14/14（临时放宽冷启动后复验）；零模型调用、22 个 company 主题生效" },
     { "id": "article-cover", "title": "正文无图时取 og:image 作封面", "kind": "code-behavior", "status": "pending" },
     { "id": "seo-surface", "title": "SEO_TITLES / siteVerification / poweredBy / 收录聚焦", "kind": "code-behavior", "status": "pending" },
     { "id": "daily-highlights", "title": "薄日报补齐今日看点", "kind": "code-behavior", "status": "pending" },
