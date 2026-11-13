@@ -112,6 +112,38 @@ ls -l .env
 
 ---
 
+## 告警在哪儿看（本地演练通道）
+
+告警现在不发飞书，走本机接收端：站点 `POST` 到 `FEISHU_ALERT_WEBHOOK_URL`，脚本落盘并弹 macOS 通知。
+
+```bash
+# 1. 起接收端（前台，关掉就收不到）
+PATH=/usr/local/bin:$PATH node scripts/local-alert-sink.mjs
+
+# 2. 看最近收到的告警（另开一个终端）
+curl -s http://127.0.0.1:38765/ | tail -30
+cat .workbuddy/alerts/$(date +%F).jsonl     # 当天全部，按行 JSON
+
+# 3. 自己在站外造一条，确认通道活着
+curl -s -X POST http://127.0.0.1:38765/alert -H 'content-type: application/json' \
+  -d '{"msg_type":"text","content":{"text":"🔴 通道自测\n看到这条说明通"}}'
+```
+
+| 项 | 值 |
+|---|---|
+| `.env` 开关 | `FEISHU_INTERNAL_ENABLED=true`、`FEISHU_ALERT_WEBHOOK_URL=http://host.docker.internal:38765/alert` |
+| 端口 | 脚本默认 `38765`，改 `PORT=` 即可（改完要同步改 `.env` 的 URL 并重启 api/worker） |
+| 弹通知 | 默认开；`ALERT_SINK_NOTIFY=false` 只落盘不弹 |
+
+**切回飞书**：只改 `.env` 的 `FEISHU_ALERT_WEBHOOK_URL` 为飞书群自定义机器人地址，其余不动，然后 `docker compose up -d api worker`。
+
+**两个必须知道的坑**：
+
+1. `OUTBOUND_NO_PROXY` 必须含 `host.docker.internal`。否则容器里的 `fetch` 会把这个请求发给 `OUTBOUND_PROXY`（Clash），必然失败。改完 `.env` 必须 `up -d`（`restart` 不会重读 `.env`）。
+2. 接收端没起时，`sendAlert` 会抛错并让整轮 `ops.alerts` 记为失败——告警通道是不可用即失败，不是静默降级。长期不发告警时把 `FEISHU_INTERNAL_ENABLED` 改回 `false`。
+
+---
+
 ## 改代码后才需要看的检查单
 
 ```bash
