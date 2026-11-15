@@ -74,7 +74,7 @@
     { "id": "article-cover", "title": "正文无图时取 og:image 作封面", "kind": "code-behavior", "status": "accepted", "evidence": "tests/article-cover.test.ts 6/6（含 0127 迁移执行）+ cover/article-components standalone 15/15；S4 须先 migrate 再服务请求；本站 site_fulltext=false 下暂不产生数据" },
     { "id": "seo-surface", "title": "SEO_TITLES / siteVerification / poweredBy / 收录聚焦", "kind": "code-behavior", "status": "accepted", "evidence": "discovery-cache + discovery-focus 7/7、topic-seo + page-metadata standalone 17/17；poweredBy=null、siteVerification={}、无新增 env/迁移" },
     { "id": "daily-highlights", "title": "薄日报补齐今日看点", "kind": "code-behavior", "status": "accepted", "evidence": "daily-highlights + report-outlets + report-recovery 39/39；pure SQL 补齐、零新增模型调用；沿用 EDITION_TIMES.daily=09:30" },
-    { "id": "fast-xml-parser", "title": "RSS 解析依赖 5.11.1 → 5.12.0", "kind": "dependency", "status": "pending" },
+    { "id": "fast-xml-parser", "title": "RSS 解析依赖 5.11.1 → 5.12.0", "kind": "dependency", "status": "accepted", "evidence": "真实 5.12.0 下 typecheck=0、rss-conditional 2/2、rss/xhtml/links/dates standalone 17/17；与 5.11.1 对同一 RSS/Atom 样本解析 IDENTICAL" },
     { "id": "night-model", "title": "UTC 16-24 夜间模型切换与动态并发上限（LLM_NIGHT_*，模板已补、默认关闭）", "kind": "config-gated", "status": "pending" },
     { "id": "dingtalk-push", "title": "钉钉内容推送", "kind": "config-gated", "status": "rejected" },
     { "id": "baidu-push", "title": "百度主动推送", "kind": "config-gated", "status": "rejected" }
