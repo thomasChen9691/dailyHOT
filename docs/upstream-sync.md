@@ -115,6 +115,7 @@ S2 **不 rebuild、不重启容器、不改 `.env`**，生产链路零影响。
 - `SITE.poweredBy` 必须是 `null`，不得出现「由 AIHOT 驱动」或 AIHOT Logo。
 - 不改 `apps/` / `packages/` 的产品行为；站点自己的规定放 `site/`、`industry/`、`modules/`。
 - `BAIDU_PUSH_ENABLED` / `DINGTALK_CONTENT_PUSH_ENABLED` 保持 `false`。
+- `LLM_NIGHT_MODEL` 保持空值：夜间模型代码保留（动态并发闸门依赖它），但本站网关是 `new-api` + `free-auto`，上游的 OC Ferry 前提不成立，不启用夜间切换。
 - 每批单独 commit；**`git push` 前需本人确认并显式列出 deferred items**。
 - 凭证由本人本地填 `.env`，不代填、不经聊天传递，不写进任何 git 跟踪文件。
 

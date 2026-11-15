@@ -65,7 +65,8 @@
     { "key": "DINGTALK_CONTENT_PUSH_ENABLED", "reason": "第二推送渠道，已用飞书告警" },
     { "key": "BAIDU_PUSH_ENABLED", "reason": "SEO 主动推送，自用练手站无收益" },
     { "key": "X / socialdata / jina 付费路径", "reason": "只用免费源是红线" },
-    { "key": "SITE.poweredBy", "value": null, "reason": "上游默认显示「由 AIHOT 驱动」，AGENTS.md 禁止使用 AIHOT 名字与 Logo" }
+    { "key": "SITE.poweredBy", "value": null, "reason": "上游默认显示「由 AIHOT 驱动」，AGENTS.md 禁止使用 AIHOT 名字与 Logo" },
+    { "key": "LLM_NIGHT_MODEL", "value": "", "reason": "夜间模型保留代码但本站不启用：上游 OC Ferry 前提在本站网关（new-api + free-auto）不成立；保持空值即 inNightWindow() 恒 false" }
   ],
   "featureGates": [
     { "id": "events-locking", "title": "事件归组合并加锁 / 热度一致性", "kind": "code-behavior", "status": "accepted", "evidence": "tests/events.test.ts 29/29（2026-11-13）" },
@@ -75,7 +76,7 @@
     { "id": "seo-surface", "title": "SEO_TITLES / siteVerification / poweredBy / 收录聚焦", "kind": "code-behavior", "status": "accepted", "evidence": "discovery-cache + discovery-focus 7/7、topic-seo + page-metadata standalone 17/17；poweredBy=null、siteVerification={}、无新增 env/迁移" },
     { "id": "daily-highlights", "title": "薄日报补齐今日看点", "kind": "code-behavior", "status": "accepted", "evidence": "daily-highlights + report-outlets + report-recovery 39/39；pure SQL 补齐、零新增模型调用；沿用 EDITION_TIMES.daily=09:30" },
     { "id": "fast-xml-parser", "title": "RSS 解析依赖 5.11.1 → 5.12.0", "kind": "dependency", "status": "accepted", "evidence": "真实 5.12.0 下 typecheck=0、rss-conditional 2/2、rss/xhtml/links/dates standalone 17/17；与 5.11.1 对同一 RSS/Atom 样本解析 IDENTICAL" },
-    { "id": "night-model", "title": "UTC 16-24 夜间模型切换与动态并发上限（LLM_NIGHT_*，模板已补、默认关闭）", "kind": "config-gated", "status": "pending" },
+    { "id": "night-model", "title": "UTC 16-24 夜间模型切换与动态并发上限（LLM_NIGHT_*，模板已补、默认关闭）", "kind": "config-gated", "status": "accepted", "enabled": false, "evidence": "default-model + model-failover 9/9；LLM_NIGHT_MODEL 为空 ⇒ 整条夜间路径不可达；代码保留（动态并发闸门是本站依赖），功能永久关闭" },
     { "id": "dingtalk-push", "title": "钉钉内容推送", "kind": "config-gated", "status": "rejected" },
     { "id": "baidu-push", "title": "百度主动推送", "kind": "config-gated", "status": "rejected" }
   ],
